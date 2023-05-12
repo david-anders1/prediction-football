@@ -1,0 +1,16 @@
+# Ignore .env files
+*.env
+
+# Ignore __pycache__ directories
+__pycache__/
+prediction-football-env/
+Publication/
+
+# Ignore .DS_Store files
+.DS_Store
+
+# Ignore all .log files
+*.log
+
+# Ignore specific file
+my_secret_file.txt
