@@ -21,9 +21,9 @@ HEADERS = {'X-RapidAPI-Key': f'{API_KEY}',
 BASE_URL = "https://api-football-v1.p.rapidapi.com/v3/"
 URL_STATISTICS = "https://api-football-v1.p.rapidapi.com/v3/fixtures/statistics"
 URL_LINEUPS = "https://api-football-v1.p.rapidapi.com/v3/fixtures/lineups"
+URL_EVENTS = f"https://api-football-v1.p.rapidapi.com/v3/fixtures/events"
 
 NAME_DB = "football_database"
-
 
 def connect_db():
     global conn 
@@ -60,7 +60,7 @@ def save_matches_to_db(json_matches, season, competition_name):
     c.execute(f'''
                 CREATE TABLE IF NOT EXISTS Matches 
                 (
-                Fixture_ID INTEGER PRIMARY KEY,
+                Fixture_ID STRING PRIMARY KEY,
                 Competition_Name TEXT,
                 Season INTEGER,
                 Home_Team TEXT,
@@ -76,8 +76,7 @@ def save_matches_to_db(json_matches, season, competition_name):
 
     # loop through each match and extract the relevant data
     for match in json_matches:
-        print(match)
-        fixture_id = match["fixture"]["id"]
+        fixture_id = str(match["fixture"]["id"])
         home_team = match["teams"]["home"]["name"]
         away_team = match["teams"]["away"]["name"]
         home_goals = match["goals"]["home"]
@@ -118,7 +117,6 @@ def process_fixtures(fixture_ids):
             stat_types, stat_values = extract_statistics(statistics)
             save_match_statistics_to_db(fixture_id, stat_types, stat_values)
         save_match_lineups_to_db(fixture_id)
-        return 
 
 
 def extract_statistics(statistics):
@@ -179,7 +177,6 @@ def save_match_statistics_to_db(fixture_id, stat_types, stat_values):
 
 def save_match_lineups_to_db(fixture_id): 
     global conn
-    c = conn.cursor()
 
     fixture_id = str(fixture_id)
     querystring = {"fixture" : fixture_id}
@@ -187,16 +184,20 @@ def save_match_lineups_to_db(fixture_id):
     response = requests.request("GET", URL_LINEUPS, headers=HEADERS, params=querystring).json()
     lineups = response["response"]
 
+    save_startingXI_to_db(lineups, fixture_id, conn)
+    save_substitutes_to_db(fixture_id, conn)
+
+
+def save_startingXI_to_db(lineups, fixture_id, db_conn):
+    db_cursor = db_conn.cursor()
+
     # extract the players who played in the match for each team
     home_players = [player["player"]["name"] for player in lineups[0]["startXI"]]
     away_players = [player["player"]["name"] for player in lineups[1]["startXI"]]
 
-    home_subs = [player["player"]["name"] for player in lineups[0]["substitutes"]]
-    away_subs = [player["player"]["name"] for player in lineups[1]["substitutes"]]
-
     # create Players table with starting lineups
-    starting_players_columns_home =  ", ".join([f"home_player_{i} TEXT" for i in range(1, len(home_players) + 1)])
-    starting_players_columns_away =  ", ".join([f"away_player_{i} TEXT" for i in range(1, len(away_players) + 1)])
+    starting_players_columns_home =  ", ".join([f"home_player_{i} TEXT" for i in range(1, 12)])
+    starting_players_columns_away =  ", ".join([f"away_player_{i} TEXT" for i in range(1, 12)])
 
     all_player_columns = starting_players_columns_home + ", " + starting_players_columns_away
 
@@ -206,45 +207,51 @@ def save_match_lineups_to_db(fixture_id):
                         {all_player_columns}
                         )
                         '''
-    c.execute(query_create_table_players)
+    db_cursor.execute(query_create_table_players)
 
     lineup_data_players = home_players + away_players
     placeholders_players = ', '.join(['?'] * len(lineup_data_players))
 
-    all_player_columns_insert_query = starting_players_columns_home + ", " + starting_players_columns_away
+    starting_players_columns_home_insert_query =  ", ".join([f"home_player_{i}" for i in range(1, 12)])
+    starting_players_columns_away_insert_query =  ", ".join([f"away_player_{i}" for i in range(1, 12)])
+    all_player_columns_insert_query = starting_players_columns_home_insert_query + ", " + starting_players_columns_away_insert_query
 
     query_insert_players = f'''
                     INSERT OR IGNORE INTO Players (fixture_id, {all_player_columns_insert_query})
                     VALUES (?, {placeholders_players})
                     '''
+    db_cursor.execute(query_insert_players, [fixture_id] + lineup_data_players)
+    db_conn.commit()
 
-    c.execute(query_insert_players, [fixture_id] + lineup_data_players)
 
-    # create Substitutes table
+def save_substitutes_to_db(fixture_id, db_conn):
+    db_cursor = db_conn.cursor()
+
+    querystring = {"fixture" : fixture_id}
+    response =  requests.request("GET", URL_EVENTS, headers=HEADERS, params=querystring).json()
+
     query_create_table_subs = '''
                         CREATE TABLE IF NOT EXISTS Substitutes (
                         id INTEGER PRIMARY KEY,
                         fixture_id STRING,
                         team TEXT,
-                        substitute_name TEXT
+                        player_subbed_off TEXT,
+                        player_subbed_in TEXT,
+                        minute_subbed_in INTEGER
                         )
                         '''
-    c.execute(query_create_table_subs)
+    db_cursor.execute(query_create_table_subs)
 
-    # insert home substitutes
-    for sub in home_subs:
-        query_insert_home_subs = '''
-                            INSERT INTO Substitutes (fixture_id, team, substitute_name)
-                            VALUES (?, ?, ?)
+    for event in response["response"]:
+        if (event['type'] == 'subst'):
+            player_subbed_in = event["assist"]["name"]
+            player_subbed_off = event["player"]["name"]
+            team_name = event["team"]["name"]
+            time_of_sub = event["time"]["elapsed"]
+            query_insert_home_subs = '''
+                            INSERT OR IGNORE INTO Substitutes (fixture_id, team, player_subbed_off, player_subbed_in, minute_subbed_in)
+                            VALUES (?, ?, ?, ?, ?)
                             '''
-        c.execute(query_insert_home_subs, [fixture_id, "home", sub])
+            db_cursor.execute(query_insert_home_subs, [fixture_id, team_name, player_subbed_off, player_subbed_in, time_of_sub])
 
-    # insert away substitutes
-    for sub in away_subs:
-        query_insert_away_subs = '''
-                            INSERT INTO Substitutes (fixture_id, team, substitute_name)
-                            VALUES (?, ?, ?)
-                            '''
-        c.execute(query_insert_away_subs, [fixture_id, "away", sub])
-
-    conn.commit()
+    db_conn.commit()

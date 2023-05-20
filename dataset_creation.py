@@ -30,13 +30,4 @@ def compile_data_for_leagues_and_seasons(leagues, seasons):
 
 
 
-#compile_data_for_leagues_and_seasons(LEAGUES_API_CODE, SEASONS_API)
-
-# fixture_id = "197055"
-# url = f"https://api-football-v1.p.rapidapi.com/v3/fixtures/events"
-# querystring = {"fixture" : fixture_id}
-# response =  requests.request("GET", url, headers=HEADERS, params=querystring).json()
-
-# for event in response["response"]:
-#     if (event['type'] == 'subst'):
-#         print(event)
+compile_data_for_leagues_and_seasons(LEAGUES_API_CODE, SEASONS_API)
