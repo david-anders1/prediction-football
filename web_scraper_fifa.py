@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 import re
 
+
 def get_soup_data_for_player(full_name, last_name, team_name):
     url_player = search_player_by_full_name(full_name)
     if url_player is None:
@@ -40,13 +41,12 @@ def get_player_info(soup):
 
 
 def get_position_ratings(soup):
-    # Find all 'div' tags with class names starting with "bp3-tag p"
     div_tags = soup.select('div[class^="bp3-tag p"]')
 
     # Extract the position and rating from each 'div' tag and store them in a dictionary
     position_ratings = {}
     for div_tag in div_tags:
-        position = div_tag.contents[0].strip()  # Get the position from the first part of the tag's content
+        position = div_tag.contents[0].strip()  
         rating = div_tag.contents[2].strip()    # Get the rating from the third part of the tag's content (after the <br> tag)
         # Remove the "+x" part of the rating
         rating = re.sub(r'\+\d$', '', rating)
@@ -106,7 +106,7 @@ def search_player_by_last_name_and_team(last_name, team_name):
     for player_soup in player_soups:
         player_row = player_soup.find_parent("tr")
         team_player_row = player_row.find("a", href=lambda href: href and "/team/" in href).string
-        if(team_player_row == team_name):
+        if (team_player_row == team_name):
             return get_complete_player_fifa_url(player_soup['href'])
         
     return None
@@ -115,6 +115,7 @@ def search_player_by_last_name_and_team(last_name, team_name):
 def get_complete_player_fifa_url(player_url):
     base_url = "https://sofifa.com"
     complete_url = f"{base_url}{player_url}"
+
     return complete_url
 
     
