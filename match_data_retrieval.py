@@ -27,19 +27,25 @@ NAME_DB = "football_database"
 
 def connect_db():
     global conn 
-    conn = sqlite3.connect(f"Data/{NAME_DB}.db")
+    try:
+        conn = sqlite3.connect(f"Data/{NAME_DB}.db")
+    except sqlite3.Error as e:
+        print(f"An error occurred while connecting to the database: {e}")
+
 
 def close_db():
     global conn
-    conn.close()
-    
+    try:
+        conn.close()
+    except sqlite3.Error as e:
+        print(f"An error occurred while closing the database: {e}")
+
 
 def get_all_live_matches():
     try:
         response = requests.get(BASE_URL + "fixtures?live=all", headers=HEADERS).json()
-    except Exception as e:
-        print(f"Exception occured: {e}")
-        return
+    except requests.exceptions.RequestException as e:
+        print(f"Exception occured when requesting from API: {e}")
     
     live_matches = response["response"]
 
@@ -51,8 +57,8 @@ def retrieve_competition_season_data(competition_name, competition_api_id, seaso
 
     try:
         response = requests.get(BASE_URL + f"fixtures?league={competition_api_id}&season={season}&timezone=Europe/Berlin", headers=HEADERS).json()
-    except Exception as e:
-        print(f"Exception occured: {e}")
+    except requests.exceptions.RequestException as e:
+        print(f"Exception occured when requesting from API: {e}")
         return
     
     json_matches = response["response"]
@@ -63,11 +69,8 @@ def retrieve_competition_season_data(competition_name, competition_api_id, seaso
     close_db()
 
 
-def save_matches_to_db(json_matches, season, competition_name):    
-    global conn
-    c = conn.cursor()
-
-    c.execute(f'''
+def create_matches_table(db_cursor):  
+    db_cursor.execute(f'''
                 CREATE TABLE IF NOT EXISTS Matches 
                 (
                 fixture_id TEXT PRIMARY KEY,
@@ -84,6 +87,63 @@ def save_matches_to_db(json_matches, season, competition_name):
                 away_team_formation TEXT
                 )
             ''')
+    global conn
+    conn.commit()
+    
+def create_statistics_table(db_cursor, names_stats):
+    query_create_table = f'''
+                    CREATE TABLE IF NOT EXISTS Statistics (
+                    fixture_id STRING PRIMARY KEY,
+                    {names_stats},
+                    FOREIGN KEY (fixture_id) REFERENCES Matches(fixture_id)
+                    )
+                    '''
+
+    db_cursor.execute(query_create_table)
+    global conn
+    conn.commit()
+
+
+def create_substitute_table(db_cursor):
+    query_create_table_subs = '''
+                        CREATE TABLE IF NOT EXISTS Substitutes (
+                        id INTEGER PRIMARY KEY,
+                        fixture_id TEXT,
+                        team TEXT,
+                        player_subbed_off TEXT,
+                        player_subbed_in TEXT,
+                        player_id_subbed_off TEXT,
+                        player_id_subbed_in TEXT,
+                        minute_subbed_in INTEGER,
+                        FOREIGN KEY (fixture_id) REFERENCES Matches(fixture_id)
+                        )
+                        '''
+    db_cursor.execute(query_create_table_subs)
+    global conn
+    conn.commit()
+
+
+def create_startingXI_table(db_cursor):
+    query_create_table_players = '''
+                        CREATE TABLE IF NOT EXISTS Players (
+                        id INTEGER PRIMARY KEY,
+                        fixture_id TEXT,
+                        player_name TEXT,
+                        player_id TEXT,
+                        position TEXT,
+                        position_on_grid TEXT,
+                        team TEXT,
+                        FOREIGN KEY(fixture_id) REFERENCES Matches(fixture_id)
+                        )
+                        '''
+    db_cursor.execute(query_create_table_players)
+
+def save_matches_to_db(json_matches, season, competition_name):    
+    global conn
+    db_cursor = conn.cursor()
+
+    create_matches_table(db_cursor)
+
     fixture_ids = []
 
     # loop through each match and extract the relevant data
@@ -106,7 +166,7 @@ def save_matches_to_db(json_matches, season, competition_name):
             continue
 
         # Insert the retrieved data into the database
-        c.execute(f'''
+        db_cursor.execute(f'''
             INSERT OR IGNORE INTO Matches (Fixture_ID, Competition_Name, Season, Home_Team, Away_Team, Home_Goals, Away_Goals, Match_Date, Match_Time, Match_Status)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (fixture_id, competition_name, season, home_team, away_team, home_goals, away_goals, match_date, match_time, match_status))
@@ -119,16 +179,24 @@ def save_matches_to_db(json_matches, season, competition_name):
 
 
 def process_fixtures(fixture_ids):
+    count = 0
     for fixture_id in fixture_ids:
         querystring = {"fixture" : fixture_id}
-        statistics_response = requests.request("GET", URL_STATISTICS, headers=HEADERS, params=querystring).json()
-        statistics = statistics_response["response"]
+        try:
+            statistics_response = requests.request("GET", URL_STATISTICS, headers=HEADERS, params=querystring).json()
+        except requests.exceptions.RequestException as e:
+            print(f"Exception occured when requesting from API: {e}")
 
+        statistics = statistics_response["response"]
         # if the api has statistics data regarding the fixture id, preprocess and save it to the database
         if (len(statistics) != 0):
             stat_types, stat_values = extract_statistics(statistics)
             save_match_statistics_to_db(fixture_id, stat_types, stat_values)
         save_match_lineups_to_db(fixture_id)
+        count += 1
+
+        if(count == 20):
+            return
 
 
 def extract_statistics(statistics):
@@ -159,24 +227,29 @@ def extract_statistics(statistics):
         print(e)
 
 
+def update_statistic_columns(db_cursor, stat_types):
+    db_cursor.execute("PRAGMA table_info(Statistics)")
+    existing_columns = [column[1] for column in db_cursor.fetchall()]  
+
+    new_columns = [stat for stat in stat_types if stat not in existing_columns]
+
+    if new_columns:
+        for column in new_columns:
+            db_cursor.execute(f"ALTER TABLE Statistics ADD COLUMN {column} REAL")
+
 
 def save_match_statistics_to_db(fixture_id, stat_types, stat_values):
     global conn
-    c = conn.cursor()
+    db_cursor = conn.cursor()
 
     fixture_id = str(fixture_id)
 
     # Create table if it doesn't exist already
-    columns_definition = ', '.join([f'{stat} REAL' for stat in stat_types])
-    query_create_table = f'''
-                        CREATE TABLE IF NOT EXISTS Statistics (
-                        fixture_id STRING PRIMARY KEY,
-                        {columns_definition},
-                        FOREIGN KEY (fixture_id) REFERENCES Matches(fixture_id)
-                        )
-                        '''
+    stats_columns = ', '.join([f'{stat} REAL' for stat in stat_types])
+    create_statistics_table(db_cursor, stats_columns)
 
-    c.execute(query_create_table)
+    # Add new stat columns to the table if api has introduced new stats for new seasons
+    update_statistic_columns(db_cursor, stat_types)
 
     # Insert the statistics
     placeholders = ', '.join('?' * len(stat_values))
@@ -184,7 +257,8 @@ def save_match_statistics_to_db(fixture_id, stat_types, stat_values):
                     INSERT OR IGNORE INTO Statistics(fixture_id, {', '.join(stat_types)})
                     VALUES (?, {placeholders})
                     '''
-    c.execute(query_insert, [fixture_id] + stat_values)
+    db_cursor.execute(query_insert, [fixture_id] + stat_values)
+
     conn.commit()
 
 
@@ -194,8 +268,8 @@ def save_match_lineups_to_db(fixture_id):
 
     try:
         response = requests.request("GET", URL_LINEUPS, headers=HEADERS, params=querystring).json()
-    except Exception as e:
-        print(f"Exception occured: {e}")
+    except requests.exceptions.RequestException as e:
+        print(f"Exception occured when requesting from API: {e}")
         return
     
     lineups = response["response"]
@@ -205,15 +279,14 @@ def save_match_lineups_to_db(fixture_id):
     save_substitutes_to_db(fixture_id)
 
 
-
 def save_formations_to_matches_table(lineups, fixture_id):
     global conn
 
     home_formation = lineups[0]["formation"]
     away_formation = lineups[1]["formation"]
     # Update the formations in the Matches table
-    c = conn.cursor()
-    c.execute('''
+    db_cursor = conn.cursor()
+    db_cursor.execute('''
         UPDATE Matches 
         SET home_team_formation = ?, away_team_formation = ? 
         WHERE fixture_id = ?
@@ -226,30 +299,23 @@ def save_startingXI_to_db(lineups, fixture_id):
 
     db_cursor = conn.cursor()
 
+    create_startingXI_table(db_cursor)
+
+    # check if fixture_id already exists
+    db_cursor.execute('SELECT * FROM Players WHERE fixture_id=?', (fixture_id,))
+    fixture_data = db_cursor.fetchone()
+    # if fixture is already present in the table, do not insert it again
+    if fixture_data is not None:
+        return
+
     # extract the players who played in the match for each team
-    query_create_table_players = '''
-                        CREATE TABLE IF NOT EXISTS Players (
-                        id INTEGER PRIMARY KEY,
-                        fixture_id TEXT,
-                        player_name TEXT,
-                        player_id TEXT,
-                        position TEXT,
-                        position_on_grid TEXT,
-                        team TEXT,
-                        FOREIGN KEY(fixture_id) REFERENCES Matches(fixture_id)
-                        )
-                        '''
-    db_cursor.execute(query_create_table_players)
+    for i, team in enumerate(["home", "away"]):
+        for player in lineups[i]["startXI"]:
+            player_id = player["player"]["id"]
+            player_name = player["player"]["name"]
+            position = player["player"]["pos"]
+            position_on_grid = player["player"]["grid"]
 
-    for player in lineups[0]["startXI"]:
-        player_id = player["player"]["id"]
-        player_name = player["player"]["name"]
-        position = player["player"]["pos"]
-        position_on_grid = player["player"]["grid"]
-
-    for i, team in enumerate(['home', 'away']):
-        players = [player["player"]["name"] for player in lineups[i]["startXI"]]
-        for position, player_name in enumerate(players, start=1):
             query_insert_player = '''
                             INSERT OR IGNORE INTO Players (fixture_id, player_name, player_id, position, position_on_grid, team)
                             VALUES (?, ?, ?, ?, ?, ?)
@@ -263,27 +329,22 @@ def save_substitutes_to_db(fixture_id):
     global conn
     db_cursor = conn.cursor()
 
-    querystring = {"fixture" : fixture_id}
-    try:
-        response =  requests.request("GET", URL_EVENTS, headers=HEADERS, params=querystring).json()
-    except Exception as e:
-        print(f"Exception occured: {e}")
+    create_substitute_table(db_cursor)
+
+    # check if fixture_id already exists
+    db_cursor.execute('SELECT * FROM Substitutes WHERE fixture_id=?', (fixture_id,))
+    fixture_data = db_cursor.fetchone()
+    # if fixture is already present in the table, do not insert it again
+    if fixture_data is not None:
         return
 
-    query_create_table_subs = '''
-                        CREATE TABLE IF NOT EXISTS Substitutes (
-                        id INTEGER PRIMARY KEY,
-                        fixture_id TEXT,
-                        team TEXT,
-                        player_subbed_off TEXT,
-                        player_subbed_in TEXT,
-                        player_id_subbed_off TEXT,
-                        player_id_subbed_in TEXT,
-                        minute_subbed_in INTEGER,
-                        FOREIGN KEY (fixture_id) REFERENCES Matches(fixture_id)
-                        )
-                        '''
-    db_cursor.execute(query_create_table_subs)
+    querystring = {"fixture" : fixture_id}
+
+    try:
+        response =  requests.request("GET", URL_EVENTS, headers=HEADERS, params=querystring).json()
+    except requests.exceptions.RequestException as e:
+        print(f"Exception occured: {e}")
+        return
 
     for event in response["response"]:
         if (event['type'] == 'subst'):
