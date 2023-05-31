@@ -5,7 +5,7 @@ from datetime import datetime
 import pandas as pd
 import os
 from dotenv import load_dotenv
-import sqlite3
+from db_manager import *
 
 # Load environment variables from .env file
 load_dotenv()
@@ -23,23 +23,6 @@ URL_STATISTICS = "https://api-football-v1.p.rapidapi.com/v3/fixtures/statistics"
 URL_LINEUPS = "https://api-football-v1.p.rapidapi.com/v3/fixtures/lineups"
 URL_EVENTS = f"https://api-football-v1.p.rapidapi.com/v3/fixtures/events"
 
-NAME_DB = "football_database"
-
-def connect_db():
-    global conn 
-    try:
-        conn = sqlite3.connect(f"Data/{NAME_DB}.db")
-    except sqlite3.Error as e:
-        print(f"An error occurred while connecting to the database: {e}")
-
-
-def close_db():
-    global conn
-    try:
-        conn.close()
-    except sqlite3.Error as e:
-        print(f"An error occurred while closing the database: {e}")
-
 
 def get_all_live_matches():
     try:
@@ -52,8 +35,10 @@ def get_all_live_matches():
     return live_matches
 
 
+
 def retrieve_competition_season_data(competition_name, competition_api_id, season):
-    connect_db()
+    global conn
+    conn = connect_db()
 
     try:
         response = requests.get(BASE_URL + f"fixtures?league={competition_api_id}&season={season}&timezone=Europe/Berlin", headers=HEADERS).json()
@@ -66,7 +51,7 @@ def retrieve_competition_season_data(competition_name, competition_api_id, seaso
     fixture_ids = save_matches_to_db(json_matches, season, competition_name)
     process_fixtures(fixture_ids)
     
-    close_db()
+    close_db(conn)
 
 
 def create_matches_table(db_cursor):  
