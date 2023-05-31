@@ -3,17 +3,19 @@ from bs4 import BeautifulSoup as bs
 from selenium.webdriver.chrome.options import Options
 import re
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 import sqlite3
 from numpy.random import random_sample
+from db_manager import *
 
 
-def get_match_data(soup, tournament, save_in_db = True):
+
+def get_match_odds(soup, tournament):
     soup_matches = soup.find_all('div', {'class': 'eventRow flex w-full flex-col text-xs'})
 
-    match_data = []
-    game_date = 0
+    match_odds = []
+    match_date = None
 
     for match in soup_matches:
         regex_match_href = re.compile(".*next-m:flex-row.*")
@@ -25,27 +27,31 @@ def get_match_data(soup, tournament, save_in_db = True):
         playing_teams = match.find_all('a', {'title': True})
         home_team = playing_teams[0].get('title')  
         away_team = playing_teams[1].get('title')  
-        
-        scores = match.find_all(lambda tag: tag.name == 'div' and re.search(r"\bhidden\b.*\bnext-m:!flex\b", str(tag.get('class', []))))
-
-        home_score = scores[0].text
-        away_score = scores[2].text
 
         div_date = match.find(lambda tag: tag.name == 'div' and 
                             re.search(r"\btext-black-main\b.*\bfont-main\b.*\bw-full\b.*\btext-xs\b.*\bfont-normal\b.*\bleading-5\b", 
                                         " ".join(tag.get('class', []))))
+
         if (div_date is not None):
             raw_text_string = div_date.text.strip()
-            # TO DO: live matches contain the "today" string which messes up the date formatting 
-            if("Today" in raw_text_string):
-                continue
-            raw_text_string_without_relegation = raw_text_string.replace(" - Relegation", "").strip()
-            # convert date string to desired format %d.%m.%Y
-            game_date = datetime.strptime(raw_text_string_without_relegation, '%d %b %Y').strftime('%d.%m.%Y')
+             
+            # Deal with "Yesterday", "Today", "Tomorrow" in datestring
+            if("Yesterday" in raw_text_string):
+                match_date = (datetime.now() - timedelta(days=1)).strftime('%d.%m.%Y')
+            elif("Today" in raw_text_string):
+                match_date = datetime.now().strftime('%d.%m.%Y')
+            elif("Tomorrow" in raw_text_string):
+                match_date = (datetime.now() + timedelta(days=1)).strftime('%d.%m.%Y')
+            else:
+                raw_text_string_without_relegation = raw_text_string.replace(" - Relegation", "").strip()
+                # convert date string to desired format %d.%m.%Y
+                match_date = datetime.strptime(raw_text_string_without_relegation, '%d %b %Y').strftime('%d.%m.%Y')
 
+        global conn
+        fixture_id = get_fixture_id(conn, match_date, home_team, away_team)
+        if (fixture_id is None):
+            continue
 
-        time = match.find('p', class_='whitespace-nowrap').text
-        
         odds = match.find_all(lambda tag: tag.name == 'p' and 
                             re.search(r"\bheight-content\b", 
                                         " ".join(tag.get('class', []))))
@@ -54,29 +60,32 @@ def get_match_data(soup, tournament, save_in_db = True):
         draw_odds = odds[1].text
         away_odds = odds[2].text
         
-        match_data.append({
-            'game_date': game_date,
-            'time': time,
+        match_odds = {
+            'fixture_id' : fixture_id,
+            'match_date': match_date,
             'home_team': home_team,
             'away_team': away_team,
-            'home_score': home_score,
-            'away_score': away_score,
             'home_odds': home_odds,
             'draw_odds': draw_odds,
             'away_odds': away_odds,
             'href' : href
-        })
-    
-    if (save_in_db):
-        create_sql_entries(match_data, tournament)
+        }
 
-    return match_data
+        save_odds_in_db(match_odds)
+
+    return match_odds
 
 
 def get_soup_matches_page(url_matches):
     options = Options()
     options.add_argument("--headless")
-    driver = webdriver.Chrome(options=options)
+    options.add_argument("--disable-gpu")
+    options.add_argument("window-size=1024,768")
+    options.add_argument("--no-sandbox")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36")
+
+    options.binary_location = "D:/Program Files (x86)/Google/Chrome/Application/chrome.exe"
+    driver = webdriver.Chrome(options=options, executable_path = "D:/chromedriver_win32/chromedriver.exe")
 
     driver.get(url_matches)
 
@@ -93,61 +102,62 @@ def get_soup_matches_page(url_matches):
         last_height = new_height
 
     page_source = driver.page_source
-
     soup = bs(page_source, 'lxml')
-
     driver.quit()
 
     return soup
 
 
-def create_sql_entries(match_data, name_db):
-    conn = sqlite3.connect(f"Data/{name_db}.db")
-
+def save_odds_in_db(match_odds):
+    global conn
     c = conn.cursor()
 
     c.execute(f'''
-        CREATE TABLE IF NOT EXISTS {name_db} (
+        CREATE TABLE IF NOT EXISTS Odds (
+            fixture_id TEXT PRIMARY KEY,
             game_date TEXT,
-            time TEXT,
             home_team TEXT,
             away_team TEXT,
-            home_score INTEGER,
-            away_score INTEGER,
             home_odds REAL,
             draw_odds REAL,
-            away_odds REAL
+            away_odds REAL,
+            href TEXT,
+            FOREIGN KEY (fixture_id) REFERENCES Matches(fixture_id)
         )
     ''')
 
-    # Iterate over match_data and insert each match into the database
-    for match in match_data:
-        c.execute(f'''
-            INSERT OR IGNORE INTO {name_db} (game_date, time, home_team, away_team, home_score, away_score, home_odds, draw_odds, away_odds)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (match['game_date'], match['time'], match['home_team'], match['away_team'], match['home_score'], match['away_score'], match['home_odds'], match['draw_odds'], match['away_odds'], match['href']))
+    c.execute(f'''
+        INSERT OR IGNORE INTO Odds (fixture_id, game_date, home_team, away_team, home_odds, draw_odds, away_odds, href)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (match_odds['fixture_id'], match_odds['match_date'], match_odds['home_team'], match_odds['away_team'], match_odds['home_odds'], match_odds['draw_odds'], match_odds['away_odds'], match_odds['href']))
 
     conn.commit()
-
-    conn.close()
 
 
 def generate_links_historic_seasons(seasons, sport, country, tournament):
     pages = list(range(1,10))
 
+    global conn
+    conn = connect_db()
     for season in seasons:
         tournament_and_season = f"{tournament}-{season}"
         for page in pages:
             url_matches = f"https://www.oddsportal.com/{sport}/{country}/{tournament_and_season}/results/#/page/{page}/"
             soup_matches = get_soup_matches_page(url_matches)
-            match_data = get_match_data(soup_matches, tournament)
+            match_data = get_match_odds(soup_matches, tournament)
+
+    close_db()
 
 
 def generate_links_current_season(sport, country, tournament):
     pages = list(range(1,10))
 
+    global conn
+    conn = connect_db()
     for page in pages:
         url_matches = f"https://www.oddsportal.com/{sport}/{country}/{tournament}/results/#/page/{page}/"
         soup_matches = get_soup_matches_page(url_matches)
-        match_data = get_match_data(soup_matches, tournament)
+        match_data = get_match_odds(soup_matches, tournament)
+
+    close_db(conn)
 
