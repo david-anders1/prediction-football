@@ -55,162 +55,20 @@ def retrieve_competition_season_data(competition_name, competition_api_id, seaso
     global all_players_in_season
     all_players_in_season = set()
 
-    db_cursor = conn.cursor()
-    create_players_table(db_cursor)
-    create_statistics_player_table(db_cursor)
-
     fixture_ids = save_matches_to_db(json_matches, season, competition_name)
     process_fixtures(fixture_ids)
 
     for player in all_players_in_season:
-        if(is_player_already_in_table(player) == False):
+        if (is_player_already_in_table(player) == False):
             save_player(player, season)
         save_player_stats_for_season(player, season)
     
     close_db(conn)
 
 
-def create_matches_table(db_cursor):  
-    db_cursor.execute(f'''
-                CREATE TABLE IF NOT EXISTS Matches 
-                (
-                fixture_id TEXT PRIMARY KEY,
-                competition_name TEXT,
-                season INTEGER,
-                home_team TEXT,
-                away_team TEXT,
-                home_goals INTEGER,
-                away_goals INTEGER,
-                match_date TEXT,
-                match_time TEXT,
-                match_status TEXT,
-                home_team_formation TEXT,
-                away_team_formation TEXT
-                )
-            ''')
-    global conn
-    conn.commit()
-    
-
-def create_match_statistics_table(db_cursor, names_stats):
-    query_create_table = f'''
-                    CREATE TABLE IF NOT EXISTS Match_Statistics (
-                    fixture_id STRING PRIMARY KEY,
-                    {names_stats},
-                    FOREIGN KEY (fixture_id) REFERENCES Matches(fixture_id)
-                    )
-                    '''
-
-    db_cursor.execute(query_create_table)
-    global conn
-    conn.commit()
-
-
-def create_substitute_table(db_cursor):
-    query_create_table_subs = '''
-                        CREATE TABLE IF NOT EXISTS Substitutes (
-                        id INTEGER PRIMARY KEY,
-                        fixture_id TEXT,
-                        team TEXT,
-                        player_subbed_off TEXT,
-                        player_subbed_in TEXT,
-                        player_id_subbed_off TEXT,
-                        player_id_subbed_in TEXT,
-                        minute_subbed_in INTEGER,
-                        FOREIGN KEY (fixture_id) REFERENCES Matches(fixture_id)
-                        )
-                        '''
-    db_cursor.execute(query_create_table_subs)
-    global conn
-    conn.commit()
-
-
-def create_startingXI_table(db_cursor):
-    query_create_table_startingXI = '''
-                        CREATE TABLE IF NOT EXISTS StartingXI (
-                        id INTEGER PRIMARY KEY,
-                        fixture_id TEXT,
-                        player_name TEXT,
-                        player_id TEXT,
-                        position TEXT,
-                        position_on_grid TEXT,
-                        team TEXT,
-                        FOREIGN KEY(fixture_id) REFERENCES Matches(fixture_id)
-                        )
-                        '''
-    db_cursor.execute(query_create_table_startingXI)
-
-
-def create_players_table(db_cursor):
-    query_create_table_players = '''
-                        CREATE TABLE IF NOT EXISTS Players (
-                        player_id TEXT PRIMARY KEY,
-                        first_name TEXT,
-                        last_name TEXT,
-                        nationality TEXT,
-                        birth_date TEXT,
-                        height INTEGER,
-                        weight INTEGER
-                        )
-                        '''
-    db_cursor.execute(query_create_table_players)
-
-
-def create_statistics_player_table(db_cursor):
-    query_create_statistics_players = '''
-                                    CREATE TABLE IF NOT EXISTS Player_Statistics (
-                                    player_id INTEGER NOT NULL,
-                                    season INTEGER NOT NULL,
-                                    competition_name TEXT NOT NULL,
-                                    appeareances INTEGER,
-                                    lineups INTEGER,
-                                    minutes_played INTEGER,
-                                    position TEXT,
-                                    rating REAL,
-                                    captain INTEGER,
-                                    substitutes_in INTEGER,
-                                    substitutes_out INTEGER,
-                                    substitutes_bench INTEGER,
-                                    shots_total INTEGER,
-                                    shots_on_goal INTEGER,
-                                    goals_total INTEGER,
-                                    goals_conceded INTEGER,
-                                    assists INTEGER,
-                                    saves INTEGER,
-                                    passes_total INTEGER,
-                                    key_passes INTEGER,
-                                    passes_accuracy INTEGER,
-                                    tackles_total INTEGER,
-                                    blocks INTEGER,
-                                    interceptions INTEGER,
-                                    duels_total INTEGER,
-                                    duels_won INTEGER,
-                                    duels_winrate REAL,
-                                    dribble_attempts INTEGER,
-                                    dribble_success REAL,
-                                    dribble_past INTEGER,
-                                    fouls_drawn INTEGER,
-                                    fouls_committed INTEGER,
-                                    cards_yellow INTEGER,
-                                    cards_yellowred INTEGER,
-                                    cards_red INTEGER,
-                                    penalties_won INTEGER,
-                                    penalties_committed INTEGER,
-                                    penalties_scored INTEGER,
-                                    penalties_missed INTEGER,
-                                    penalties_saved INTEGER,
-                                    FOREIGN KEY(player_id) REFERENCES Players(player_id),
-                                    PRIMARY KEY(player_id, season, competition_name)
-                                    );
-                                    '''
-    db_cursor.execute(query_create_statistics_players)
-
-
 def save_matches_to_db(json_matches, season, competition_name):    
     global conn
     db_cursor = conn.cursor()
-
-    create_matches_table(db_cursor)
 
     fixture_ids = []
 
@@ -247,7 +105,6 @@ def save_matches_to_db(json_matches, season, competition_name):
 
 
 def process_fixtures(fixture_ids):
-    count = 0
     for fixture_id in fixture_ids:
         querystring = {"fixture" : fixture_id}
         try:
@@ -261,10 +118,6 @@ def process_fixtures(fixture_ids):
             stat_types, stat_values = extract_statistics(statistics)
             save_match_statistics_to_db(fixture_id, stat_types, stat_values)
         save_match_lineups_to_db(fixture_id)
-        count += 1
-
-        if(count == 10):
-            return
 
 
 def extract_statistics(statistics):
@@ -296,9 +149,8 @@ def extract_statistics(statistics):
 
 
 def update_match_statistic_columns(db_cursor, stat_types):
-    db_cursor.execute("PRAGMA table_info(Statistics)")
+    db_cursor.execute("PRAGMA table_info(Match_Statistics)")
     existing_columns = [column[1] for column in db_cursor.fetchall()]  
-
     new_columns = [stat for stat in stat_types if stat not in existing_columns]
 
     if new_columns:
@@ -317,7 +169,7 @@ def save_match_statistics_to_db(fixture_id, stat_types, stat_values):
 
     # Create table if it doesn't exist already
     stats_columns = ', '.join([f'{stat} REAL' for stat in stat_types])
-    create_match_statistics_table(db_cursor, stats_columns)
+    create_match_statistics_table(conn, stats_columns)
 
     # Add new stat columns to the table if api has introduced new stats for new seasons
     update_match_statistic_columns(db_cursor, stat_types)
@@ -344,18 +196,21 @@ def save_match_lineups_to_db(fixture_id):
         return
     
     lineups = response["response"]
+    if (lineups):
+        save_formations_to_matches_table(lineups, fixture_id)
+        save_startingXI_to_db(lineups, fixture_id)
+        save_substitutes_to_db(fixture_id)
 
-    save_formations_to_matches_table(lineups, fixture_id)
-    save_startingXI_to_db(lineups, fixture_id)
-    save_substitutes_to_db(fixture_id)
 
-
+# Update the formations in the Matches table
 def save_formations_to_matches_table(lineups, fixture_id):
-    global conn
+    try:
+        home_formation = lineups[0]["formation"]
+        away_formation = lineups[1]["formation"]
+    except IndexError as e:
+        return
 
-    home_formation = lineups[0]["formation"]
-    away_formation = lineups[1]["formation"]
-    # Update the formations in the Matches table
+    global conn
     db_cursor = conn.cursor()
     db_cursor.execute('''
         UPDATE Matches 
@@ -383,11 +238,11 @@ def save_player(player_id, season):
     querystring = {"id" : player_id, "season": season}
 
     try:
-        response = requests.request("GET", URL_LINEUPS, headers=HEADERS, params=querystring).json()
+        response = requests.request("GET", URL_PLAYERS, headers=HEADERS, params=querystring).json()
     except requests.exceptions.RequestException as e:
         print(f"Exception occured when requesting from API: {e}")
         return
-    
+
     try:
         player_data = response["response"][0]["player"]
     except IndexError as e:
@@ -401,23 +256,28 @@ def save_player(player_id, season):
     height = player_data["height"]
     weight = player_data["weight"]
     birth_date = player_data["birth"]["date"]
-    date_obj = datetime.strptime(birth_date, "%Y-%m-%d")
-    birth_date = date_obj.strftime("%d.%m.%Y")
+    try:
+        date_obj = datetime.strptime(birth_date, "%Y-%m-%d")
+        birth_date = date_obj.strftime("%d.%m.%Y")
+    # no birth date found in data
+    except TypeError as e:
+        birth_date = None
+    # sometimes there's an inconsistency in the api football with a different format for the birth date
+    except ValueError as e:
+        date_obj = datetime.strptime(birth_date, "%Y-%d-%m")
+        birth_date = date_obj.strftime("%d.%m.%Y")
 
     global conn
     db_cursor = conn.cursor()
-    db_cursor.execute("INSERT OR IGNORE INTO Players (player_id, firstname, lastname, nationality, height, weight, birth_date) VALUES (?, ?, ?, ?, ?, ?, ?)", 
-            (first_name, last_name, nationality, height, weight, birth_date))
+    db_cursor.execute("INSERT OR IGNORE INTO Players (player_id, first_name, last_name, nationality, height, weight, birth_date) VALUES (?, ?, ?, ?, ?, ?, ?)", 
+            (player_id, first_name, last_name, nationality, height, weight, birth_date))
 
     conn.commit()
 
 
 def save_startingXI_to_db(lineups, fixture_id):
     global conn
-
     db_cursor = conn.cursor()
-
-    create_startingXI_table(db_cursor)
 
     # check if fixture_id already exists
     db_cursor.execute('SELECT * FROM StartingXI WHERE fixture_id=?', (fixture_id,))
@@ -429,19 +289,20 @@ def save_startingXI_to_db(lineups, fixture_id):
     global all_players_in_season
     # extract the players who played in the match for each team
     for i, team in enumerate(["home", "away"]):
-        for player in lineups[i]["startXI"]:
-            player_id = player["player"]["id"]
-            player_name = player["player"]["name"]
-            position = player["player"]["pos"]
-            position_on_grid = player["player"]["grid"]
-            all_players_in_season.add(player_id)
+        try:
+            for player in lineups[i]["startXI"]:
+                player_id = player["player"]["id"]
+                position = player["player"]["pos"]
+                position_on_grid = player["player"]["grid"]
+                all_players_in_season.add(player_id)
 
-            query_insert_player = '''
-                            INSERT OR IGNORE INTO StartingXI (fixture_id, player_name, player_id, position, position_on_grid, team)
-                            VALUES (?, ?, ?, ?, ?, ?)
-                            '''
-            db_cursor.execute(query_insert_player, [fixture_id, player_name, player_id, position, position_on_grid, team])
-
+                query_insert_player = '''
+                                INSERT OR IGNORE INTO StartingXI (fixture_id, player_id, position, position_on_grid, team)
+                                VALUES (?, ?, ?, ?, ?)
+                                '''
+                db_cursor.execute(query_insert_player, [fixture_id, player_id, position, position_on_grid, team])
+        except IndexError as e:
+            continue
 
     conn.commit()
 
@@ -449,8 +310,6 @@ def save_startingXI_to_db(lineups, fixture_id):
 def save_substitutes_to_db(fixture_id):
     global conn
     db_cursor = conn.cursor()
-
-    create_substitute_table(db_cursor)
 
     # check if fixture_id already exists
     db_cursor.execute('SELECT * FROM Substitutes WHERE fixture_id=?', (fixture_id,))
@@ -467,23 +326,25 @@ def save_substitutes_to_db(fixture_id):
         print(f"Exception occured: {e}")
         return
 
+
     global all_players_in_season
     for event in response["response"]:
-        if (event['type'] == 'subst'):
-            player_subbed_off = event["player"]["name"]
-            player_subbed_in = event["assist"]["name"]
-            player_id_subbed_off = event["player"]["id"]
-            player_id_subbed_in = event["assist"]["id"]
-            all_players_in_season.add(player_id_subbed_in)
-            all_players_in_season.add(player_id_subbed_off)
+        try:
+            if (event['type'] == 'subst'):
+                player_id_subbed_off = event["player"]["id"]
+                player_id_subbed_in = event["assist"]["id"]
+                all_players_in_season.add(player_id_subbed_in)
+                all_players_in_season.add(player_id_subbed_off)
 
-            team_name = event["team"]["name"]
-            time_of_sub = event["time"]["elapsed"]
-            query_insert_home_subs = '''
-                            INSERT OR IGNORE INTO Substitutes (fixture_id, team, player_subbed_off, player_subbed_in, player_id_subbed_off, player_id_subbed_in, minute_subbed_in)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
-                            '''
-            db_cursor.execute(query_insert_home_subs, [fixture_id, team_name, player_subbed_off, player_subbed_in, player_id_subbed_off, player_id_subbed_in, time_of_sub])
+                team_name = event["team"]["name"]
+                time_of_sub = event["time"]["elapsed"]
+                query_insert_home_subs = '''
+                                INSERT OR IGNORE INTO Substitutes (fixture_id, team, player_id_subbed_off, player_id_subbed_in, minute_subbed_in)
+                                VALUES (?, ?, ?, ?, ?)
+                                '''
+                db_cursor.execute(query_insert_home_subs, [fixture_id, team_name, player_id_subbed_off, player_id_subbed_in, time_of_sub])
+        except IndexError as e:
+            continue
 
     conn.commit()
 
