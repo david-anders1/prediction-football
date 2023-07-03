@@ -8,6 +8,7 @@ import time
 import sqlite3
 from numpy.random import random_sample
 from db_manager import *
+from selenium.webdriver.chrome.service import Service
 
 
 
@@ -31,7 +32,7 @@ def get_match_odds(soup, tournament):
         div_date = match.find(lambda tag: tag.name == 'div' and 
                             re.search(r"\btext-black-main\b.*\bfont-main\b.*\bw-full\b.*\btext-xs\b.*\bfont-normal\b.*\bleading-5\b", 
                                         " ".join(tag.get('class', []))))
-
+        print(div_date)
         if (div_date is not None):
             raw_text_string = div_date.text.strip()
              
@@ -43,9 +44,9 @@ def get_match_odds(soup, tournament):
             elif("Tomorrow" in raw_text_string):
                 match_date = (datetime.now() + timedelta(days=1)).strftime('%d.%m.%Y')
             else:
-                raw_text_string_without_relegation = raw_text_string.replace(" - Relegation", "").strip()
+                raw_text_string_without_relegation_promotion = raw_text_string.replace(" - Relegation", "").replace(" - Promotion", "").strip()
                 # convert date string to desired format %d.%m.%Y
-                match_date = datetime.strptime(raw_text_string_without_relegation, '%d %b %Y').strftime('%d.%m.%Y')
+                match_date = datetime.strptime(raw_text_string_without_relegation_promotion, '%d %b %Y').strftime('%d.%m.%Y')
 
         global conn
         fixture_id = get_fixture_id(conn, match_date, home_team, away_team)
@@ -85,7 +86,7 @@ def get_soup_matches_page(url_matches):
     options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36")
 
     options.binary_location = "D:/Program Files (x86)/Google/Chrome/Application/chrome.exe"
-    driver = webdriver.Chrome(options=options, executable_path = "D:/chromedriver_win32/chromedriver.exe")
+    driver = webdriver.Chrome(service=Service("D:/chromedriver_win32/chromedriver.exe"), options=options)
 
     driver.get(url_matches)
 
@@ -134,7 +135,7 @@ def save_odds_in_db(match_odds):
     conn.commit()
 
 
-def generate_links_historic_seasons(seasons, sport, country, tournament):
+def generate_links_historic_seasons(sport, seasons, country, tournament):
     pages = list(range(1,10))
 
     global conn
@@ -146,7 +147,7 @@ def generate_links_historic_seasons(seasons, sport, country, tournament):
             soup_matches = get_soup_matches_page(url_matches)
             match_data = get_match_odds(soup_matches, tournament)
 
-    close_db()
+    close_db(conn)
 
 
 def generate_links_current_season(sport, country, tournament):
@@ -160,4 +161,5 @@ def generate_links_current_season(sport, country, tournament):
         match_data = get_match_odds(soup_matches, tournament)
 
     close_db(conn)
+
 

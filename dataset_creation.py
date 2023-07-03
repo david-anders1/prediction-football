@@ -1,4 +1,5 @@
 from match_data_retrieval import *
+from web_scraper_odds import generate_links_current_season, generate_links_historic_seasons
 
 LEAGUES_API_CODE = {"Bundesliga" : "78",
            "Premier League" : "39",
@@ -39,9 +40,13 @@ def compile_data_for_internationalcomp_and_seasons(international_comp, seasons):
             retrieve_competition_season_data(competition_name=comp, competition_api_id=INTERNATIONAL_COMPETITIONS_API_CODE.get(comp), season=season)
 
 
+def compile_odds_for_leagues_and_seasons(league_mapping: dict, seasons: list):
+    for country, league in league_mapping.items():
+        print(f"Getting odds for {league}")
+        generate_links_historic_seasons(sport="football", seasons=seasons, country=country, tournament=league)
 
+compile_odds_for_leagues_and_seasons(COUNTRY_AND_LEAGUES_ODDS_PORTAL, SEASONS_ODDS_PORTAL)
 
-compile_data_for_leagues_and_seasons(LEAGUES_API_CODE, SEASONS_API)
+#compile_data_for_leagues_and_seasons(LEAGUES_API_CODE, SEASONS_API)
 #compile_data_for_internationalcomp_and_seasons(INTERNATIONAL_COMPETITIONS_API_CODE, SEASONS_API)
-
-
+#generate_links_current_season(sport="football", country="germany", tournament="bundesliga")
