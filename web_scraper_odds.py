@@ -85,7 +85,7 @@ def get_soup_matches_page(url_matches):
     options.add_argument("--no-sandbox")
     options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36")
 
-    options.binary_location = "D:/Program Files (x86)/Google/Chrome/Application/chrome.exe"
+    #options.binary_location = "D:/chromedriver_win32/chromedriver.exe"
     driver = webdriver.Chrome(service=Service("D:/chromedriver_win32/chromedriver.exe"), options=options)
 
     driver.get(url_matches)

@@ -1,5 +1,8 @@
 from match_data_retrieval import *
 from web_scraper_odds import generate_links_current_season, generate_links_historic_seasons
+from web_scraper_fifa import *
+import time
+import random
 
 LEAGUES_API_CODE = {"Bundesliga" : "78",
            "Premier League" : "39",
@@ -45,8 +48,60 @@ def compile_odds_for_leagues_and_seasons(league_mapping: dict, seasons: list):
         print(f"Getting odds for {league}")
         generate_links_historic_seasons(sport="football", seasons=seasons, country=country, tournament=league)
 
-compile_odds_for_leagues_and_seasons(COUNTRY_AND_LEAGUES_ODDS_PORTAL, SEASONS_ODDS_PORTAL)
 
+
+def compile_fifa_player_data():
+    conn = connect_db()
+    query = "SELECT * FROM Players"
+    df_players = pd.read_sql_query(query, conn)
+
+    for index, player in df_players.iterrows():
+        print(player["player_id"])
+        # if player already exists in fifa table, skip to the next one
+        if check_player_exists(conn, player["player_id"]):
+            continue
+
+        try:
+            delay_between_webscrapes = random.uniform(0.2, 0.5)
+            time.sleep(delay_between_webscrapes)
+            
+            soup_player = search_player_by_full_name(f"{player['first_name']} {player['last_name']}")
+
+            if (soup_player is None):
+                num_words_last_name = count_words(player["last_name"])
+                for season in range(2015, 2024):
+                    delay_between_webscrapes = random.uniform(0.05, 0.1)
+                    time.sleep(delay_between_webscrapes)
+
+                    teams = get_teams_for_player_in_season(player["player_id"], conn, season)
+                    fifa_version = map_season_to_fifa_version(season)
+ 
+                    for team in teams:
+                        if(num_words_last_name > 1):
+                            for part_last_name in (player["last_name"].split()):
+                                url_player = search_player_by_last_name_and_team(part_last_name, team, fifa_version)
+                                if (url_player):
+                                    soup_player = get_soup_for_url(url_player)
+                                    break
+                        else:       
+                            url_player = search_player_by_last_name_and_team(player["last_name"], team, fifa_version)
+                            if (url_player):
+                                soup_player = get_soup_for_url(url_player)
+                                break
+                        
+            if (soup_player):
+                compile_data_for_all_fifa_version_cards(player["player_id"], soup_player)
+            else:
+                print(f"Webscraping did not work for player {player['last_name']} with player id {player['player_id']}.")
+
+        except AttributeError as e:
+            continue
+
+    conn.close()
+
+
+compile_fifa_player_data()
+#compile_odds_for_leagues_and_seasons(COUNTRY_AND_LEAGUES_ODDS_PORTAL, SEASONS_ODDS_PORTAL)
 #compile_data_for_leagues_and_seasons(LEAGUES_API_CODE, SEASONS_API)
 #compile_data_for_internationalcomp_and_seasons(INTERNATIONAL_COMPETITIONS_API_CODE, SEASONS_API)
 #generate_links_current_season(sport="football", country="germany", tournament="bundesliga")

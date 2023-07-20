@@ -2,6 +2,48 @@ import requests
 from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 import re
+from datetime import datetime
+import json
+from db_manager import connect_db
+from copy import deepcopy
+
+headers = {'User-Agent': UserAgent().chrome}
+
+
+
+
+# Used for accessing fifa cards of previous fifa versions
+date_url_component_fifa_version = { 
+                                    #"FIFA 07": "070002",
+                                    #"FIFA 08": "080002",
+                                    #"FIFA 09": "090002",
+                                    #"FIFA 10": "100002",
+                                    #"FIFA 11": "110002",
+                                    #"FIFA 12": "120002",
+                                    #"FIFA 13": "130034",
+                                    #"FIFA 14": "140052",
+                                    "FIFA 15": "150059",
+                                    "FIFA 16": "160058",
+                                    "FIFA 17": "170099",
+                                    "FIFA 18": "180084",
+                                    "FIFA 19": "190075",
+                                    "FIFA 20": "200061",
+                                    "FIFA 21": "210064",
+                                    "FIFA 22": "220069",
+                                    "FIFA 23": "230045",
+                                }
+
+def map_season_to_fifa_version(season_year):
+    # Check if the season year is a valid integer
+    if not isinstance(season_year, int):
+        raise ValueError("Year should be an integer")
+        
+    if season_year < 1993 or season_year > 2099:
+        raise ValueError("Year should be between 1993 and 2099")
+
+    fifa_version = 'FIFA ' + str(season_year)[-2:]
+    
+    return fifa_version
 
 
 def get_soup_data_for_player(full_name, last_name, team_name):
@@ -11,12 +53,53 @@ def get_soup_data_for_player(full_name, last_name, team_name):
     if url_player is None:
         return 
 
-    headers = {'User-Agent': UserAgent().chrome}
-    response = requests.get(url_player, headers=headers)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    
-    return soup
+    return get_soup_for_url(url_player)
 
+def get_teams_for_player_in_season(player_id, conn, season):
+    db_cursor = conn.cursor()
+    
+    # merge different tables to get team name where player has played in given season
+    query = """
+    SELECT DISTINCT M.home_team AS Team 
+    FROM Matches M 
+    INNER JOIN StartingXI S ON M.fixture_id = S.fixture_id 
+    WHERE S.player_id = ? AND M.season = ? AND S.team = 'home'
+    UNION
+    SELECT DISTINCT M.away_team AS Team 
+    FROM Matches M 
+    INNER JOIN StartingXI S ON M.fixture_id = S.fixture_id 
+    WHERE S.player_id = ? AND M.season = ? AND S.team = 'away'
+    UNION
+    SELECT DISTINCT M.home_team AS Team 
+    FROM Matches M 
+    INNER JOIN Substitutes SUB ON M.fixture_id = SUB.fixture_id 
+    WHERE SUB.player_id_subbed_in = ? AND M.season = ? AND SUB.team = M.home_team
+    UNION
+    SELECT DISTINCT M.away_team AS Team 
+    FROM Matches M 
+    INNER JOIN Substitutes SUB ON M.fixture_id = SUB.fixture_id 
+    WHERE SUB.player_id_subbed_in = ? AND M.season = ? AND SUB.team = M.away_team
+    """
+    
+    db_cursor.execute(query, (player_id, season, player_id, season, player_id, season, player_id, season))
+    
+    rows = db_cursor.fetchall()
+    
+    # return the list of teams
+    return [row[0] for row in rows]
+
+
+def get_soup_for_url(search_url):
+    try:
+        response = requests.get(search_url, headers=headers)
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        return soup
+    except requests.exceptions.ChunkedEncodingError as e:
+        print(e)
+
+def count_words(s):
+    return len(s.split())
 
 def get_player_info(soup):
     player_info = {}
@@ -50,7 +133,7 @@ def get_position_ratings(soup):
         rating = div_tag.contents[2].strip()    # Get the rating from the third part of the tag's content (after the <br> tag)
         # Remove the "+x" part of the rating
         rating = re.sub(r'\+\d$', '', rating)
-        position_ratings[position] = int(rating)
+        position_ratings[position] = rating
 
     return position_ratings
 
@@ -78,28 +161,30 @@ def get_skill_stats(soup):
     return skill_data
 
 
-
-
 def search_player_by_full_name(full_name):
     search_url = f"https://sofifa.com/players?keyword={full_name}"
 
-    headers = {'User-Agent': UserAgent().chrome}
-    response = requests.get(search_url, headers=headers)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    player_soup = soup.find("a", {"role": "tooltip"}, href=lambda href: href and "/player/" in href)
+    for fifa_version_url_component in reversed(list(date_url_component_fifa_version.values())):
+        search_url_fifa_version = search_url + "&r=" + fifa_version_url_component  + "&set=true"
+        soup = get_soup_for_url(search_url_fifa_version)
+        player_href = soup.find("a", {"role": "tooltip"}, href=lambda href: href and "/player/" in href)
 
-    if player_soup:
-        return get_complete_player_fifa_url(player_soup['href']) 
-    else:
-        return None
+        # if valid player soup found (i.e., player search was successful for the specific fifa version) continue with the rest of the code
+        # once one version of a player card found, this card can be used to access all the versions for the player
+        if player_href:
+            complete_player_url = get_complete_player_fifa_url(player_href['href']) 
+            soup_player = get_soup_for_url(complete_player_url)
+            return soup_player
+        
+    return None
 
 
-def search_player_by_last_name_and_team(last_name, team_name):
+def search_player_by_last_name_and_team(last_name, team_name, fifa_version = "FIFA 23"):
     search_url = f"https://sofifa.com/players?keyword={last_name}"
+    fifa_version_url_component = date_url_component_fifa_version[fifa_version]
+    search_url_fifa_version = search_url + "&r=" + fifa_version_url_component  + "&set=true"
 
-    headers = {'User-Agent': UserAgent().chrome}
-    response = requests.get(search_url, headers=headers)
-    soup = BeautifulSoup(response.text, 'html.parser')
+    soup = get_soup_for_url(search_url_fifa_version)
 
     player_soups = soup.find_all("a", {"role": "tooltip"}, href=lambda href: href and "/player/" in href)
 
@@ -111,6 +196,23 @@ def search_player_by_last_name_and_team(last_name, team_name):
         
     return None
 
+def compile_data_for_all_fifa_version_cards(player_id, player_soup):
+    versions = scrape_fifa_versions(player_soup)
+    conn = connect_db()
+
+    for version in versions:
+        url = get_complete_player_fifa_url(version["last_appearance_url"])
+        date = version["last_appearance_date"]
+        soup_version_player = get_soup_for_url(url)
+        skill_stats_version_player = get_skill_stats(soup_version_player)["stats"]
+        player_info_version_player = get_player_info(soup_version_player)
+        position_ratings_version_player = get_position_ratings(soup_version_player)
+
+        fifa_version, formatted_date_version_card = clean_date_string(date)
+        insert_fifa_data(conn, player_id = player_id, player_info = player_info_version_player, player_skill_stats = skill_stats_version_player,
+                        player_position_ratings = position_ratings_version_player,
+                        fifa_version = fifa_version, date_fifa_card = formatted_date_version_card)
+
 
 def get_complete_player_fifa_url(player_url):
     base_url = "https://sofifa.com"
@@ -118,4 +220,86 @@ def get_complete_player_fifa_url(player_url):
 
     return complete_url
 
+def scrape_fifa_versions(soup):    
+    table = soup.find('table') 
+    rows = table.find_all('tr')
+    versions = []
     
+    for row in rows:
+        cols = row.find_all('td')
+        if cols:
+            season = cols[0].text
+            team = cols[1].find('a').text
+            last_appearance_url = cols[2].find('a')['href']
+            last_appearance_date = cols[2].find('a').text
+            
+            # append the information as a dictionary to the versions list
+            versions.append({
+                'season': season,
+                'team': team,
+                'last_appearance_url': last_appearance_url,
+                'last_appearance_date': last_appearance_date
+            })
+            
+    return versions
+
+
+def clean_date_string(date_fifa_string):
+    # regular expression to match the FIFA version and date
+    match = re.match(r'FIFA (\d+) ([A-Za-z]+ \d+, \d+)', date_fifa_string)
+
+    if match:
+        fifa_version = int(match.group(1))
+        date_str = match.group(2)
+        
+        # convert the date to the desired format
+        date = datetime.strptime(date_str, '%b %d, %Y')
+        formatted_date_version_card = date.strftime('%d.%m.%Y')
+
+    return fifa_version, formatted_date_version_card
+
+
+def insert_fifa_data(conn, player_id, player_info, player_skill_stats, player_position_ratings, fifa_version, date_fifa_card):
+    db_cursor = conn.cursor()
+    db_cursor.execute(f"INSERT OR IGNORE INTO FIFA_Player_Statistics VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+                      (player_id, 
+                       player_info.get('Overall rating', None), 
+                       player_info.get('Potential', None),
+                       player_info.get('Preferred foot', None),
+                       player_info.get('Weak foot', None),
+                       player_info.get('Skill moves', None),
+                       player_info.get('Work rate', None),
+                       player_info.get('Body type', None),
+                       player_info.get('Best Position', None),
+                       player_info.get('Best Overall rating', None),
+                       json.dumps(player_position_ratings), 
+                       json.dumps(player_skill_stats),
+                       fifa_version,
+                       date_fifa_card
+    ))
+    conn.commit()
+
+
+#player_soup = get_soup_data_for_player("Florian Wirtz", "Wirtz", "Bayer Leverkusen")
+#print(player_soup)
+
+#skill_stats = get_skill_stats(player_soup)
+# versions = scrape_fifa_versions(player_soup)
+# conn = connect_db()
+
+# for version in versions:
+#     url = get_complete_player_fifa_url(version["last_appearance_url"])
+#     date = version["last_appearance_date"]
+#     soup_version_player = get_soup_for_url(url)
+#     skill_stats_version_player = get_skill_stats(soup_version_player)["stats"]
+#     player_info_version_player = get_player_info(soup_version_player)
+#     position_ratings_version_player = get_position_ratings(soup_version_player)
+
+#     fifa_version, formatted_date_version_card = clean_date_string(date)
+#     insert_fifa_data(conn, player_id = "test1", player_info = player_info_version_player, player_skill_stats = skill_stats_version_player,
+#                      player_position_ratings = position_ratings_version_player,
+#                      fifa_version = fifa_version, date_fifa_card = formatted_date_version_card)
+
+
+
+#print(skill_stats)

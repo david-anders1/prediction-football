@@ -23,6 +23,7 @@ def connect_db():
         create_substitute_table(conn)
         create_startingXI_table(conn)
         create_players_table(conn)
+        create_fifa_players_table(conn)
         create_statistics_player_table(conn)
 
         return conn
@@ -121,6 +122,39 @@ def create_players_table(conn):
     db_cursor = conn.cursor()
     db_cursor.execute(query_create_table_players)
 
+
+def create_fifa_players_table(conn):
+    query_create_table_players = '''
+                        CREATE TABLE IF NOT EXISTS FIFA_Player_Statistics (
+                        player_id TEXT,
+                        overall_rating INTEGER,
+                        potential INTEGER,
+                        preferred_foot TEXT,
+                        weak_foot INTEGER,
+                        skill_moves INTEGER,
+                        work_rate TEXT,
+                        body_type TEXT,
+                        best_position TEXT,
+                        best_overall_rating INTEGER,
+                        positions TEXT,
+                        stats TEXT,
+                        fifa_version TEXT,
+                        date_fifa_card TEXT,
+                        PRIMARY KEY(player_id, date_fifa_card)
+                        )
+                        '''
+    db_cursor = conn.cursor()
+    db_cursor.execute(query_create_table_players)
+
+
+def check_player_exists(conn, player_id):
+    db_cursor = conn.cursor()
+    db_cursor.execute(f"SELECT 1 FROM FIFA_Player_Statistics WHERE player_id = ?", (player_id,))
+    result = db_cursor.fetchone()
+    
+    return result is not None
+
+
 def create_statistics_player_table(conn):
     query_create_statistics_players = '''
                                     CREATE TABLE IF NOT EXISTS Player_Statistics (
@@ -183,6 +217,37 @@ def get_fixture_id(conn, match_date, home_team, away_team):
     else:
         fixture_id = fuzzy_match_team_names(cur, match_date, home_team, away_team)
         return fixture_id
+
+
+def update_team_name(conn, old_team_name, new_team_name):  
+    db_cursor = conn.cursor()
+    
+    # Update the home_team column
+    db_cursor.execute(f'''
+                UPDATE Matches
+                SET home_team = ?
+                WHERE home_team = ?
+            ''', (new_team_name, old_team_name))
+    
+    # Update the away_team column
+    db_cursor.execute(f'''
+                UPDATE Matches
+                SET away_team = ?
+                WHERE away_team = ?
+            ''', (new_team_name, old_team_name))
+
+    conn.commit()
+
+def update_german_team_names():
+    conn = connect_db()
+    update_team_name(conn, "Bayern Munich", "FC Bayern München")
+    update_team_name(conn, "FC Koln", "FC Köln")
+    update_team_name(conn, "Fortuna Dusseldorf", "Fortuna Düsseldorf")
+    update_team_name(conn, "Borussia Monchengladbach", "Borussia Mönchengladbach")
+    update_team_name(conn, "SpVgg Greuther Furth", "SpVgg Greuther Fürth")
+    update_team_name(conn, "VfL BOCHUM", "VfL Bochum")
+
+    conn.close()
 
 
 def match_fixture_teams_by_name(cur, match_date, home_team, away_team):
