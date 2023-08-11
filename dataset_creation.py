@@ -69,12 +69,12 @@ def compile_fifa_player_data():
 
             if (soup_player is None):
                 num_words_last_name = count_words(player["last_name"])
-                for season in range(2015, 2024):
+                for season_begin_year in range(2015, 2024):
                     delay_between_webscrapes = random.uniform(0.05, 0.1)
                     time.sleep(delay_between_webscrapes)
 
-                    teams = get_teams_for_player_in_season(player["player_id"], conn, season)
-                    fifa_version = map_season_to_fifa_version(season)
+                    teams = get_teams_for_player_in_season(player["player_id"], conn, season_begin_year)
+                    fifa_version = map_season_to_fifa_version(season_begin_year)
  
                     for team in teams:
                         if(num_words_last_name > 1):
@@ -83,7 +83,8 @@ def compile_fifa_player_data():
                                 if (url_player):
                                     soup_player = get_soup_for_url(url_player)
                                     break
-                        else:       
+                        else:
+                            print(player["last_name"], team, season_begin_year, fifa_version)       
                             url_player = search_player_by_last_name_and_team(player["last_name"], team, fifa_version)
                             if (url_player):
                                 soup_player = get_soup_for_url(url_player)
@@ -105,3 +106,6 @@ compile_fifa_player_data()
 #compile_data_for_leagues_and_seasons(LEAGUES_API_CODE, SEASONS_API)
 #compile_data_for_internationalcomp_and_seasons(INTERNATIONAL_COMPETITIONS_API_CODE, SEASONS_API)
 #generate_links_current_season(sport="football", country="germany", tournament="bundesliga")
+
+
+#update_german_team_names()

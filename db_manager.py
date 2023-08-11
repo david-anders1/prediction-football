@@ -238,6 +238,7 @@ def update_team_name(conn, old_team_name, new_team_name):
 
     conn.commit()
 
+# update team names manually to be in line with the naming on sofifa.com (such that webscraping can work correctly)
 def update_german_team_names():
     conn = connect_db()
     update_team_name(conn, "Bayern Munich", "FC Bayern München")
@@ -246,6 +247,10 @@ def update_german_team_names():
     update_team_name(conn, "Borussia Monchengladbach", "Borussia Mönchengladbach")
     update_team_name(conn, "SpVgg Greuther Furth", "SpVgg Greuther Fürth")
     update_team_name(conn, "VfL BOCHUM", "VfL Bochum")
+    update_team_name(conn, "Bayer Leverkusen", "Bayer 04 Leverkusen")
+    update_team_name(conn, "SC Paderborn 07", "Paderborn")
+    update_team_name(conn, "FC Heidenheim", "Heidenheim")
+    update_team_name(conn, "FC Ingolstadt 04", "Ingolstadt")
 
     conn.close()
 

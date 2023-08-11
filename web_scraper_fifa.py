@@ -41,7 +41,7 @@ def map_season_to_fifa_version(season_year):
     if season_year < 1993 or season_year > 2099:
         raise ValueError("Year should be between 1993 and 2099")
 
-    fifa_version = 'FIFA ' + str(season_year)[-2:]
+    fifa_version = 'FIFA ' + str(season_year + 1)[-2:]
     
     return fifa_version
 
