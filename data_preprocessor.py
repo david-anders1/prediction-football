@@ -165,6 +165,14 @@ def merge_home_away_with_original(df, home_stats_df, away_stats_df):
     return df_with_form_stats.merge(away_stats_df, left_on=['away_team', 'match_date'], right_on=['team', 'match_date'], how='left').drop(columns=['team', 'type'])
 
 
+def format_result(x):
+    if(x == "home"):
+        return 0
+    elif(x == "draw"):
+        return 1
+    else:
+        return 2
+
 def preprocess_data():
     df = fetch_and_merge_data()
     df = clean_data(df)

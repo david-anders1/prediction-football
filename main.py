@@ -1,5 +1,5 @@
-from data_preprocessor import preprocess_data
-from models import train_and_evaluate_models
+from data_preprocessor import preprocess_data, format_result
+from models import log_results_mlflow
 from sklearn.model_selection import train_test_split
 
 def do_analysis():
@@ -22,9 +22,8 @@ def do_analysis():
     features += rolling_avg_features
     
     df = df.dropna(subset=features)
-    
     X_train, X_test, y_train, y_test = train_test_split(df[features], df[target_feature], test_size=0.2, random_state=42)
-    train_and_evaluate_models(X_train, y_train, X_test, y_test)
+    log_results_mlflow(X_train, y_train, X_test, y_test)
 
 
 if __name__ == "__main__":
