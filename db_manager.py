@@ -18,6 +18,14 @@ NAMECONVERSION_ODDSPORTAL_API = {
 
 
 def connect_db():
+    """
+    Connect to the SQLite database and create the necessary tables if they do not exist.
+    
+    Returns
+    -------
+    Connection
+        a SQLite connection object if successful, else prints an error message.
+    """
     try:
         conn = sqlite3.connect(DATABASE_PATH)
 
@@ -33,18 +41,47 @@ def connect_db():
         print(f"An error occurred while connecting to the database: {e}")
 
 def fetch_data_from_db(table_name):
+    """
+    Fetch all rows from a specified table in the SQLite database and return them in a DataFrame.
+    
+    Parameters
+    ----------
+    table_name : str
+        The name of the table from which to fetch the data.
+    
+    Returns
+    -------
+    DataFrame
+        a DataFrame containing all rows from the specified table.
+    """
     with sqlite3.connect(DATABASE_PATH) as conn:
         df = pd.read_sql_query(f"SELECT * FROM {table_name}", conn)
     return df
 
 def close_db(conn):
+    """
+    Close the connection to the SQLite database.
+    
+    Parameters
+    ----------
+    conn : Connection
+        The SQLite connection object to be closed.
+    """
     try:
         conn.close()
     except sqlite3.Error as e:
         print(f"An error occurred while closing the database: {e}")
 
 
-def create_matches_table(conn):  
+def create_matches_table(conn): 
+    """
+    Create the 'Matches' table in the SQLite database if it does not exist.
+    
+    Parameters
+    ----------
+    conn : Connection
+        The SQLite connection object.
+    """ 
     db_cursor = conn.cursor()
     db_cursor.execute(f'''
                 CREATE TABLE IF NOT EXISTS Matches 
@@ -67,6 +104,16 @@ def create_matches_table(conn):
     
 
 def create_match_statistics_table(conn, names_stats):
+    """
+    Create the 'Match_Statistics' table in the SQLite database if it does not exist.
+    
+    Parameters
+    ----------
+    conn : Connection
+        The SQLite connection object.
+    names_stats : str
+        A string representing the names of the columns in the 'Match_Statistics' table.
+    """
     db_cursor = conn.cursor()
     query_create_table = f'''
                     CREATE TABLE IF NOT EXISTS Match_Statistics (
@@ -81,6 +128,14 @@ def create_match_statistics_table(conn, names_stats):
 
 
 def create_substitute_table(conn):
+    """
+    Create the 'Substitutes' table in the SQLite database if it does not exist.
+    
+    Parameters
+    ----------
+    conn : Connection
+        The SQLite connection object.
+    """
     query_create_table_subs = '''
                         CREATE TABLE IF NOT EXISTS Substitutes (
                         id INTEGER PRIMARY KEY,
@@ -98,6 +153,14 @@ def create_substitute_table(conn):
 
 
 def create_startingXI_table(conn):
+    """
+    Create the 'StartingXI' table in the SQLite database if it does not exist.
+    
+    Parameters
+    ----------
+    conn : Connection
+        The SQLite connection object.
+    """
     query_create_table_startingXI = '''
                         CREATE TABLE IF NOT EXISTS StartingXI (
                         id INTEGER PRIMARY KEY,
@@ -114,6 +177,14 @@ def create_startingXI_table(conn):
 
 
 def create_players_table(conn):
+    """
+    Create the 'Players' table in the SQLite database if it does not exist.
+    
+    Parameters
+    ----------
+    conn : Connection
+        The SQLite connection object.
+    """
     query_create_table_players = '''
                         CREATE TABLE IF NOT EXISTS Players (
                         player_id TEXT PRIMARY KEY,
@@ -130,6 +201,14 @@ def create_players_table(conn):
 
 
 def create_fifa_players_table(conn):
+    """
+    Create the 'FIFA_Player_Statistics' table in the SQLite database if it does not exist.
+    
+    Parameters
+    ----------
+    conn : Connection
+        The SQLite connection object.
+    """
     query_create_table_players = '''
                         CREATE TABLE IF NOT EXISTS FIFA_Player_Statistics (
                         player_id TEXT,
@@ -154,6 +233,21 @@ def create_fifa_players_table(conn):
 
 
 def check_player_exists(conn, player_id):
+    """
+    Check if a player exists in the 'FIFA_Player_Statistics' table.
+    
+    Parameters
+    ----------
+    conn : Connection
+        The SQLite connection object.
+    player_id : str
+        The ID of the player to check.
+    
+    Returns
+    -------
+    bool
+        True if the player exists, False otherwise.
+    """
     db_cursor = conn.cursor()
     db_cursor.execute(f"SELECT 1 FROM FIFA_Player_Statistics WHERE player_id = ?", (player_id,))
     result = db_cursor.fetchone()
@@ -162,6 +256,14 @@ def check_player_exists(conn, player_id):
 
 
 def create_statistics_player_table(conn):
+    """
+    Create the 'Player_Statistics' table in the SQLite database if it does not exist.
+    
+    Parameters
+    ----------
+    conn : Connection
+        The SQLite connection object.
+    """
     query_create_statistics_players = '''
                                     CREATE TABLE IF NOT EXISTS Player_Statistics (
                                     player_id INTEGER NOT NULL,
@@ -213,6 +315,25 @@ def create_statistics_player_table(conn):
 
 
 def get_fixture_id(conn, match_date, home_team, away_team):
+    """
+    Retrieve the fixture_id for a match using match_date and team names.
+    
+    Parameters
+    ----------
+    conn : Connection
+        The SQLite connection object.
+    match_date : str
+        The date of the match.
+    home_team : str
+        The name of the home team.
+    away_team : str
+        The name of the away team.
+    
+    Returns
+    -------
+    str or None
+        The fixture_id if found, None otherwise.
+    """
     conn = sqlite3.connect('Data/football_database.db')
     cur = conn.cursor()
 
@@ -226,6 +347,18 @@ def get_fixture_id(conn, match_date, home_team, away_team):
 
 
 def update_team_name(conn, old_team_name, new_team_name):  
+    """
+    Update team names in the 'Matches' table in the SQLite database.
+    
+    Parameters
+    ----------
+    conn : Connection
+        The SQLite connection object.
+    old_team_name : str
+        The old name of the team to be updated.
+    new_team_name : str
+        The new name of the team to be updated.
+    """
     db_cursor = conn.cursor()
     
     # Update the home_team column
@@ -244,8 +377,10 @@ def update_team_name(conn, old_team_name, new_team_name):
 
     conn.commit()
 
-# update team names manually to be in line with the naming on sofifa.com (such that webscraping can work correctly)
 def update_german_team_names():
+    """
+    Update the names of German teams in the 'Matches' table to align with the naming on sofifa.com (such that webscraping can work correctly).
+    """
     conn = connect_db()
     update_team_name(conn, "Bayern Munich", "FC Bayern München")
     update_team_name(conn, "FC Koln", "FC Köln")
@@ -262,6 +397,25 @@ def update_german_team_names():
 
 
 def match_fixture_teams_by_name(cur, match_date, home_team, away_team):
+    """
+    Retrieve the fixture_id for a match using match_date and team names by matching exact names or converted names.
+    
+    Parameters
+    ----------
+    cur : Cursor
+        The SQLite cursor object.
+    match_date : str
+        The date of the match.
+    home_team : str
+        The name of the home team.
+    away_team : str
+        The name of the away team.
+    
+    Returns
+    -------
+    str or None
+        The fixture_id if found, None otherwise.
+    """
     if home_team in NAMECONVERSION_ODDSPORTAL_API.keys():
         home_team = NAMECONVERSION_ODDSPORTAL_API.get(home_team)
     if away_team in NAMECONVERSION_ODDSPORTAL_API.keys():
@@ -282,8 +436,32 @@ def match_fixture_teams_by_name(cur, match_date, home_team, away_team):
         return None
     
 
-# Do fuzzy string matching to solve the problem of different team names in the API and on oddsportal
 def fuzzy_match_team_names(cur, match_date, home_team, away_team):
+    """
+    This function performs fuzzy string matching to resolve discrepancies between team names
+    in the API and on oddsportal, and returns the fixture_id of the matched team if found.
+
+    Parameters
+    ----------
+    cur : sqlite3.Cursor
+        Cursor object to execute SQLite commands.
+    match_date : str
+        The date of the match in a string format.
+    home_team : str
+        The name of the home team.
+    away_team : str
+        The name of the away team.
+
+    Returns
+    -------
+    str or None
+        Returns the fixture_id of the matched team if found, else returns None.
+
+    Notes
+    -----
+    The function uses fuzzy string matching from the `fuzzywuzzy` package to compare team names. 
+    A similarity ratio above 65 is considered as a match.
+    """
     query = f"""
     SELECT fixture_id, home_team, away_team
     FROM Matches

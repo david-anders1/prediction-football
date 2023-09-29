@@ -16,6 +16,20 @@ from datetime import datetime
 
 
 def train_and_evaluate_models(X_train, y_train, X_test, y_test):
+    """
+    Trains and evaluates multiple machine learning models and logs the metrics and models using mlflow.
+    
+    Parameters
+    ----------
+    X_train : pd.DataFrame
+        Training data features.
+    y_train : pd.Series
+        Training data labels.
+    X_test : pd.DataFrame
+        Test data features.
+    y_test : pd.Series
+        Test data labels.
+    """
     models = {
         'Logistic Regression': LogisticRegression(max_iter=1000),
         'Decision Tree': DecisionTreeClassifier(random_state=42),
@@ -23,7 +37,7 @@ def train_and_evaluate_models(X_train, y_train, X_test, y_test):
     }
     
     for name, model in models.items():
-        with mlflow.start_run(nested=True, run_name=name):  # Start a new nested MLflow run for each model
+        with mlflow.start_run(nested=True, run_name=name): 
             # Train model
             model.fit(X_train, y_train)
             y_pred_train = model.predict(X_train)
@@ -39,7 +53,21 @@ def train_and_evaluate_models(X_train, y_train, X_test, y_test):
 
 
 def train_neural_network(X_train, y_train, X_test, y_test):
-    with mlflow.start_run(nested=True, run_name="Neural Network"):  # Start a new nested MLflow run for Neural Network
+    """
+    Trains and evaluates a neural network model and logs the metrics and model using mlflow.
+    
+    Parameters
+    ----------
+    X_train : pd.DataFrame
+        Training data features.
+    y_train : pd.Series
+        Training data labels.
+    X_test : pd.DataFrame
+        Test data features.
+    y_test : pd.Series
+        Test data labels.
+    """
+    with mlflow.start_run(nested=True, run_name="Neural Network"): 
         encoder = LabelEncoder()
         y_train_encoded = encoder.fit_transform(y_train)
         y_test_encoded = encoder.transform(y_test)
@@ -64,6 +92,21 @@ def train_neural_network(X_train, y_train, X_test, y_test):
 
 
 def log_results_mlflow(X_train, y_train, X_test, y_test):
+    """
+    Initiates mlflow run and logs the results of training and evaluation of multiple models.
+    
+    Parameters
+    ----------
+    X_train : pd.DataFrame
+        Training data features.
+    y_train : pd.Series
+        Training data labels.
+    X_test : pd.DataFrame
+        Test data features.
+    y_test : pd.Series
+        Test data labels.
+    """
+
     with mlflow.start_run(run_name=f"models_{datetime.now}"): 
         train_and_evaluate_models(X_train, y_train, X_test, y_test)
         train_neural_network(X_train, y_train, X_test, y_test)
