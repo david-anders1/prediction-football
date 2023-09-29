@@ -415,8 +415,8 @@ def preprocess_data():
     numeric_cols = [col for col in all_teams_df.columns if all_teams_df[col].dtype != 'datetime64[ns]' and col not in ['team', 'type']]
     all_teams_df_grouped = calculate_rolling_avg(all_teams_df, numeric_cols)
     
-    home_stats_df = get_renamed_df(all_teams_df_grouped, 'home', home_stats)
-    away_stats_df = get_renamed_df(all_teams_df_grouped, 'away', away_stats)
+    home_stats_df = get_renamed_df(all_teams_df_grouped, 'home')
+    away_stats_df = get_renamed_df(all_teams_df_grouped, 'away')
     
     return merge_home_away_with_original(df, home_stats_df, away_stats_df)
 

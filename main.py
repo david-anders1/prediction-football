@@ -20,6 +20,8 @@ def do_analysis():
     ]
 
     features += rolling_avg_features
+    #print(df.head())
+    #print(df.columns)
     
     df = df.dropna(subset=features)
     X_train, X_test, y_train, y_test = train_test_split(df[features], df[target_feature], test_size=0.2, random_state=42)

@@ -7,17 +7,19 @@ from keras.models import Sequential
 from keras.layers import Dense
 from keras.optimizers import Adam
 from sklearn.preprocessing import LabelEncoder
-
 import mlflow
 import mlflow.sklearn
-
 import mlflow.keras  
+
 from datetime import datetime
+import xgboost as xgb
+
 
 
 def train_and_evaluate_models(X_train, y_train, X_test, y_test):
     """
-    Trains and evaluates multiple machine learning models and logs the metrics and models using mlflow.
+    Trains and evaluates multiple machine learning models including XGBoost and logs 
+    the metrics and models using mlflow.
     
     Parameters
     ----------
@@ -30,26 +32,37 @@ def train_and_evaluate_models(X_train, y_train, X_test, y_test):
     y_test : pd.Series
         Test data labels.
     """
+    
+    # Encode the target variable
+    encoder = LabelEncoder()
+    y_train_encoded = encoder.fit_transform(y_train)
+    y_test_encoded = encoder.transform(y_test)
+    
     models = {
         'Logistic Regression': LogisticRegression(max_iter=1000),
         'Decision Tree': DecisionTreeClassifier(random_state=42),
-        'Random Forest': RandomForestClassifier(random_state=42)
+        'Random Forest': RandomForestClassifier(random_state=42),
+        'XGBoost': xgb.XGBClassifier(use_label_encoder=False, eval_metric='mlogloss', random_state=42) # Including XGBoost
     }
     
     for name, model in models.items():
-        with mlflow.start_run(nested=True, run_name=name): 
+        with mlflow.start_run(nested=True, run_name=name):
             # Train model
-            model.fit(X_train, y_train)
+            model.fit(X_train, y_train_encoded)  # Using Encoded y_train
             y_pred_train = model.predict(X_train)
             y_pred_test = model.predict(X_test)
-            acc_train = accuracy_score(y_train, y_pred_train)
-            acc_test = accuracy_score(y_test, y_pred_test)
+            acc_train = accuracy_score(y_train_encoded, y_pred_train)  # Using Encoded y_train
+            acc_test = accuracy_score(y_test_encoded, y_pred_test)  # Using Encoded y_test
 
             # Log parameters, metrics, and model
             mlflow.log_param('model_name', name)
             mlflow.log_metric('training_accuracy', acc_train)
             mlflow.log_metric('test_accuracy', acc_test)
-            mlflow.sklearn.log_model(model, f"{name}_model")
+            if name == 'XGBoost':
+                mlflow.xgboost.log_model(model, f"{name}_model")  # Logging XGBoost model
+            else:
+                mlflow.sklearn.log_model(model, f"{name}_model")
+
 
 
 def train_neural_network(X_train, y_train, X_test, y_test):
@@ -107,6 +120,6 @@ def log_results_mlflow(X_train, y_train, X_test, y_test):
         Test data labels.
     """
 
-    with mlflow.start_run(run_name=f"models_{datetime.now}"): 
+    with mlflow.start_run(run_name=f"models_{datetime.now()}"): 
         train_and_evaluate_models(X_train, y_train, X_test, y_test)
         train_neural_network(X_train, y_train, X_test, y_test)
