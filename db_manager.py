@@ -1,7 +1,9 @@
 import sqlite3
+import pandas as pd
 from fuzzywuzzy import fuzz
 
-NAME_DB = "football_database"
+DATABASE_PATH = 'Data/football_database.db'
+
 
 # Here the conversion of team names between the oddsportal naming convention and the api football naming convention can be listed
 NAMECONVERSION_ODDSPORTAL_API = {
@@ -17,7 +19,7 @@ NAMECONVERSION_ODDSPORTAL_API = {
 
 def connect_db():
     try:
-        conn = sqlite3.connect(f"Data/{NAME_DB}.db")
+        conn = sqlite3.connect(DATABASE_PATH)
 
         create_matches_table(conn)
         create_substitute_table(conn)
@@ -30,6 +32,10 @@ def connect_db():
     except sqlite3.Error as e:
         print(f"An error occurred while connecting to the database: {e}")
 
+def fetch_data_from_db(table_name):
+    with sqlite3.connect(DATABASE_PATH) as conn:
+        df = pd.read_sql_query(f"SELECT * FROM {table_name}", conn)
+    return df
 
 def close_db(conn):
     try:
