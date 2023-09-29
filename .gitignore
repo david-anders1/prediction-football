@@ -16,3 +16,5 @@ Data
 
 # Ignore specific file
 my_secret_file.txt
+
+mlruns
