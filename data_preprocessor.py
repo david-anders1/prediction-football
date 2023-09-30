@@ -413,7 +413,7 @@ def preprocess_data():
     home_stats, away_stats = get_home_away_stats()
     all_teams_df = prepare_unified_dataset(df, home_stats, away_stats)
     numeric_cols = [col for col in all_teams_df.columns if all_teams_df[col].dtype != 'datetime64[ns]' and col not in ['team', 'type']]
-    all_teams_df_grouped = calculate_rolling_avg(all_teams_df, numeric_cols)
+    all_teams_df_grouped = calculate_rolling_avg(all_teams_df, numeric_cols, n_rolling_average=5)
     
     home_stats_df = get_renamed_df(all_teams_df_grouped, 'home')
     away_stats_df = get_renamed_df(all_teams_df_grouped, 'away')

@@ -13,9 +13,11 @@ from keras.models import Sequential
 from keras.layers import Dense
 from keras.optimizers import Adam
 from datetime import datetime
-from sklearn.feature_selection import RFE
 from itertools import compress
 import pandas as pd
+from sklearn.feature_selection import RFECV
+from sklearn.model_selection import StratifiedKFold
+
 
 
 def single_feature_assessment_ml_models(X_train, y_train, X_test, y_test, models_to_evaluate=None, cv=5):
@@ -64,7 +66,7 @@ def single_feature_assessment_ml_models(X_train, y_train, X_test, y_test, models
                     mlflow.xgboost.log_model(model, f"{name}_{feature}_model")
                 else:
                     mlflow.sklearn.log_model(model, f"{name}_{feature}_model")
-                    
+
 
 def single_feature_assessment_nn(X_train, y_train, X_test, y_test, cv=5):
     encoder = LabelEncoder()
@@ -127,28 +129,41 @@ def train_and_evaluate_models_with_cv(X_train, y_train, X_test, y_test, models_t
     
     for name, model in models.items():
         with mlflow.start_run(nested=True, run_name=name):
-            selector = RFE(model, n_features_to_select=1, step=1)
+            # Using StratifiedKFold to maintain the distribution of target class during cross-validation
+            strat_k_fold = StratifiedKFold(n_splits=cv)
+            
+            # Applying RFE with cross-validation, starting with all features.
+            selector = RFECV(estimator=model, step=1, cv=strat_k_fold, scoring='accuracy')
             selector = selector.fit(X_train, y_train_encoded)
             
+            # Getting the features that are selected by RFE
             selected_features = list(compress(X_train.columns.tolist(), selector.support_))
-            mlflow.log_param('selected_features', selected_features)
-            
+            #mlflow.log_param('selected_features', selected_features)
+            # Writing the selected features to a file
+            with open("selected_features.txt", "w") as f:
+                for feature in selected_features:
+                    f.write("%s\n" % feature)
+                    
+            # Logging the file as an artifact
+            mlflow.log_artifact("selected_features.txt")
+
+            # Training the model with selected features
             X_train_selected = X_train[selected_features]
             X_test_selected = X_test[selected_features]
 
             model.fit(X_train_selected, y_train_encoded)
-            cv_scores = cross_val_score(model, X_train_selected, y_train_encoded, cv=cv, scoring='accuracy')
-            acc_cv = np.mean(cv_scores)
             
             y_pred_train = model.predict(X_train_selected)
             y_pred_test = model.predict(X_test_selected)
             acc_train = accuracy_score(y_train_encoded, y_pred_train)
             acc_test = accuracy_score(y_test_encoded, y_pred_test)
 
+            # Logging parameters and metrics to MLflow
             mlflow.log_param('model_name', name)
             mlflow.log_metric('training_accuracy', acc_train)
             mlflow.log_metric('test_accuracy', acc_test)
-            mlflow.log_metric('cross_val_accuracy', acc_cv)
+            mlflow.log_metric('num_selected_features', len(selected_features))
+            mlflow.log_metric('cross_val_accuracy', selector.cv_results_['mean_test_score'].mean())
             
             if name == 'XGBoost':
                 mlflow.xgboost.log_model(model, f"{name}_model")
@@ -191,6 +206,7 @@ def train_neural_network_with_cv(X_train, y_train, X_test, y_test, cv=5):
         mlflow.log_metric('test_accuracy', test_acc)
         mlflow.log_metric('cross_val_accuracy', acc_cv)
         mlflow.keras.log_model(model_nn, "NN_model")
+
 
 def log_results_mlflow_with_cv(X_train, y_train, X_test, y_test, models_to_evaluate=None, evaluate_nn=True, cv=5):
     with mlflow.start_run(run_name=f"models_{datetime.now()}"):
