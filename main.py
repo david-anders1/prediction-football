@@ -1,6 +1,8 @@
 from data_preprocessor import preprocess_data, format_result
-from models import log_results_mlflow
+from models import log_results_mlflow_with_cv, single_feature_assessment_ml_models
 from sklearn.model_selection import train_test_split
+
+models_to_evaluate = ["Logistic Regression", "Decision Tree", "Random Forest", "XGBoost"]
 
 def do_analysis():
     df = preprocess_data()
@@ -8,6 +10,7 @@ def do_analysis():
     target_feature = "result"
 
     features = ['home_winning_streak', 'away_winning_streak']
+    
     # Additional rolling average stats
     rolling_avg_features = [
         "home_avg_fouls", "home_avg_corner_kicks", "home_avg_offsides", "home_avg_ball_possession",
@@ -20,12 +23,12 @@ def do_analysis():
     ]
 
     features += rolling_avg_features
-    #print(df.head())
-    #print(df.columns)
+    print(df.columns)
     
     df = df.dropna(subset=features)
     X_train, X_test, y_train, y_test = train_test_split(df[features], df[target_feature], test_size=0.2, random_state=42)
-    log_results_mlflow(X_train, y_train, X_test, y_test)
+    #log_results_mlflow(X_train, y_train, X_test, y_test, models_to_evaluate = models_to_evaluate)
+    single_feature_assessment_ml_models(X_train, y_train, X_test, y_test, models_to_evaluate = models_to_evaluate)
 
 
 if __name__ == "__main__":
