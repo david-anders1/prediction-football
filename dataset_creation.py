@@ -3,6 +3,12 @@ from web_scraper_odds import generate_links_current_season, generate_links_histo
 from web_scraper_fifa import *
 import time
 import random
+import logging
+
+# empty logging data before every script run
+with open('fifa_webscraping_data.log', 'w'):
+    pass
+logging.basicConfig(filename='fifa_webscraping_data.log', level=logging.INFO)
 
 LEAGUES_API_CODE = {"Bundesliga" : "78",
            "Premier League" : "39",
@@ -50,53 +56,61 @@ def compile_odds_for_leagues_and_seasons(league_mapping: dict, seasons: list):
 
 
 
+def search_for_player(player, conn):
+    num_words_last_name = count_words(player["last_name"])
+
+    for season_begin_year in range(2015, 2024):
+        time.sleep(random.uniform(0.05, 0.1))
+
+        teams = get_teams_for_player_in_season(player["player_id"], conn, season_begin_year)
+        fifa_version = map_season_to_fifa_version(season_begin_year)
+
+        for team in teams:
+            soup_player = search_through_different_player_teams(player, team, fifa_version, num_words_last_name)
+            if soup_player:
+                return soup_player
+    return None
+
+def search_through_different_player_teams(player, team, fifa_version, num_words_last_name):
+    if num_words_last_name > 1:
+        all_name_parts = player["last_name"].replace("-", " ").split()
+
+        for part_last_name in all_name_parts:
+            soup_player = get_player_soup(part_last_name, team, fifa_version)
+            if soup_player:
+                return soup_player
+    else:
+        return get_player_soup(player["last_name"], team, fifa_version)
+
+def get_player_soup(name, team, fifa_version):
+    url_player = search_player_by_last_name_and_team(name, team, fifa_version)
+    if url_player:
+        return get_soup_for_url(url_player)
+    else:
+        logging.warning(f"Did not find url for player using {name}, {team}, {fifa_version}")
+        return None
+
 def compile_fifa_player_data():
     conn = connect_db()
     query = "SELECT * FROM Players"
     df_players = pd.read_sql_query(query, conn)
 
-    for index, player in df_players.iterrows():
-        print(player["player_id"])
-        # if player already exists in fifa table, skip to the next one
+    for _, player in df_players.iterrows():
         if check_player_exists(conn, player["player_id"]):
             continue
-
-        try:
-            delay_between_webscrapes = random.uniform(0.2, 0.5)
-            time.sleep(delay_between_webscrapes)
-            
-            soup_player = search_player_by_full_name(f"{player['first_name']} {player['last_name']}")
-
-            if (soup_player is None):
-                num_words_last_name = count_words(player["last_name"])
-                for season_begin_year in range(2015, 2024):
-                    delay_between_webscrapes = random.uniform(0.05, 0.1)
-                    time.sleep(delay_between_webscrapes)
-
-                    teams = get_teams_for_player_in_season(player["player_id"], conn, season_begin_year)
-                    fifa_version = map_season_to_fifa_version(season_begin_year)
- 
-                    for team in teams:
-                        if(num_words_last_name > 1):
-                            for part_last_name in (player["last_name"].split()):
-                                url_player = search_player_by_last_name_and_team(part_last_name, team, fifa_version)
-                                if (url_player):
-                                    soup_player = get_soup_for_url(url_player)
-                                    break
-                        else:
-                            print(player["last_name"], team, season_begin_year, fifa_version)       
-                            url_player = search_player_by_last_name_and_team(player["last_name"], team, fifa_version)
-                            if (url_player):
-                                soup_player = get_soup_for_url(url_player)
-                                break
-                        
-            if (soup_player):
-                compile_data_for_all_fifa_version_cards(player["player_id"], soup_player)
-            else:
-                print(f"Webscraping did not work for player {player['last_name']} with player id {player['player_id']}.")
-
-        except AttributeError as e:
-            continue
+        
+        print(player["last_name"])
+        time.sleep(random.uniform(0.2, 0.5))
+        
+        soup_player = search_player_by_full_name(f"{player['first_name']} {player['last_name']}")
+        
+        if soup_player is None:
+            soup_player = search_for_player(player, conn)
+        if soup_player:
+            compile_data_for_all_fifa_version_cards(player["player_id"], soup_player)
+            logging.info(f"Inserted data for player {player['last_name']}")
+        else:
+            logging.error(f"Webscraping did not work for player {player['last_name']} with player id {player['player_id']}.")
 
     conn.close()
 
