@@ -59,7 +59,14 @@ mapping_db_sofifa_naming = {
                                 "Lyon" : "Olympique Lyonnais",
                                 "AS Roma" : "Roma",
                                 "SC Paderborn 07" : "Paderborn",
-                                "Arminia Bielefeld" : "DSC Arminia Bielefeld"
+                                "Arminia Bielefeld" : "DSC Arminia Bielefeld",
+                                "Barcelona" : "FC Barcelona",
+                                "Club Brugge KV" : "Club Brugge",
+                                "Spartak Moscow" : "Spartak Moskva",
+                                "Swansea" : "Swansea City",
+                                "Marseille" : "Olympique de Marseille",
+                                "FC Midtjylland" : "Midtjylland"
+
                             }
 
 def map_season_to_fifa_version(season_year):
@@ -108,9 +115,19 @@ def get_teams_for_player_in_season(player_id, conn, season):
     FROM Matches M 
     INNER JOIN Substitutes SUB ON M.fixture_id = SUB.fixture_id 
     WHERE SUB.player_id_subbed_in = ? AND M.season = ? AND SUB.team = M.away_team
+    UNION
+    SELECT DISTINCT M.home_team
+    FROM Matches M 
+    INNER JOIN Substitutes SUB ON M.fixture_id = SUB.fixture_id 
+    WHERE SUB.player_id_subbed_off = ? AND M.season = ? AND SUB.team = M.home_team
+    UNION
+    SELECT DISTINCT M.away_team
+    FROM Matches M 
+    INNER JOIN Substitutes SUB ON M.fixture_id = SUB.fixture_id 
+    WHERE SUB.player_id_subbed_off = ? AND M.season = ? AND SUB.team = M.away_team
     """
     
-    db_cursor.execute(query, (player_id, season, player_id, season, player_id, season, player_id, season))
+    db_cursor.execute(query, (player_id, season, player_id, season, player_id, season, player_id, season, player_id, season, player_id, season))
     
     rows = db_cursor.fetchall()
     

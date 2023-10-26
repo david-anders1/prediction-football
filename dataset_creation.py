@@ -65,6 +65,8 @@ def search_for_player(player, conn):
         teams = get_teams_for_player_in_season(player["player_id"], conn, season_begin_year)
         fifa_version = map_season_to_fifa_version(season_begin_year)
 
+        print(teams)
+
         for team in teams:
             soup_player = search_through_different_player_teams(player, team, fifa_version, num_words_last_name)
             if soup_player:
@@ -76,18 +78,19 @@ def search_through_different_player_teams(player, team, fifa_version, num_words_
         all_name_parts = player["last_name"].replace("-", " ").split()
 
         for part_last_name in all_name_parts:
-            soup_player = get_player_soup(part_last_name, team, fifa_version)
+            soup_player = get_player_soup(part_last_name, team, fifa_version, player["player_id"])
             if soup_player:
                 return soup_player
     else:
-        return get_player_soup(player["last_name"], team, fifa_version)
+        print(player)
+        return get_player_soup(player["last_name"], team, fifa_version, player["player_id"])
 
-def get_player_soup(name, team, fifa_version):
+def get_player_soup(name, team, fifa_version, id):
     url_player = search_player_by_last_name_and_team(name, team, fifa_version)
     if url_player:
         return get_soup_for_url(url_player)
     else:
-        logging.warning(f"Did not find url for player using {name}, {team}, {fifa_version}")
+        logging.error(f"Webscraping did not work for player with {id} using {name}, {team}, {fifa_version}")
         return None
 
 def compile_fifa_player_data():
@@ -110,7 +113,7 @@ def compile_fifa_player_data():
             compile_data_for_all_fifa_version_cards(player["player_id"], soup_player)
             logging.info(f"Inserted data for player {player['last_name']}")
         else:
-            logging.error(f"Webscraping did not work for player {player['last_name']} with player id {player['player_id']}.")
+            logging.error(f"Soup not found for player {id} {player['first_name']} {player['last_name']}")
 
     conn.close()
 

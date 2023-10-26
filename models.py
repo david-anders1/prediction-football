@@ -138,7 +138,7 @@ def train_and_evaluate_models_with_cv(X_train, y_train, X_test, y_test, models_t
             
             # Getting the features that are selected by RFE
             selected_features = list(compress(X_train.columns.tolist(), selector.support_))
-            #mlflow.log_param('selected_features', selected_features)
+
             # Writing the selected features to a file
             with open("selected_features.txt", "w") as f:
                 for feature in selected_features:

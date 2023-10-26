@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from db_manager import fetch_data_from_db
+from sklearn.preprocessing import MinMaxScaler
 
 
 def get_favorite(row):
@@ -404,7 +405,7 @@ def preprocess_data():
     
     Returns
     -------
-    pd.DataFrame
+    df_home_away : pd.DataFrame
         A preprocessed and cleaned DataFrame ready for modeling.
     """
     df = fetch_and_merge_data()
@@ -417,8 +418,82 @@ def preprocess_data():
     
     home_stats_df = get_renamed_df(all_teams_df_grouped, 'home')
     away_stats_df = get_renamed_df(all_teams_df_grouped, 'away')
-    
-    return merge_home_away_with_original(df, home_stats_df, away_stats_df)
+
+    df_all_match_data = merge_home_away_with_original(df, home_stats_df, away_stats_df)
+
+
+    df_match_and_player_data = add_player_data(df_all_match_data)
+    df_normalized = normalize_numeric_columns(df_match_and_player_data)
+
+    return df_normalized
+
+def normalize_numeric_columns(df):
+    # Separate the numeric columns and non-numeric columns
+    numeric_cols = df.select_dtypes(include=[np.number])  # using numpy here
+    non_numeric_cols = df.select_dtypes(exclude=[np.number])
+
+    # Instantiate the scaler
+    scaler = MinMaxScaler()
+
+    # Fit to the data and transform it
+    scaled_data = scaler.fit_transform(numeric_cols)
+
+    # Creating a new dataframe with the scaled data
+    scaled_numeric_cols = pd.DataFrame(scaled_data, columns=numeric_cols.columns, index=numeric_cols.index)
+
+    # Concatenating the non-numeric and scaled numeric dataframes
+    df_normalized = pd.concat([non_numeric_cols, scaled_numeric_cols], axis=1)
+
+    return df_normalized
+
+
+
+
+def add_player_data(df_match_data):
+    #df_players = fetch_data_from_db('Players')
+    df_starting_xi = fetch_data_from_db('StartingXI')
+    #df_player_stats = fetch_data_from_db("Player_Statistics")
+    df_fifa_stats = fetch_data_from_db("FIFA_Player_Statistics")
+    df_starting_xi['fixture_id'] = df_starting_xi['fixture_id'].astype('int64')
+
+    df_starting_xi['team_position'] = df_starting_xi['team'] + '_' + df_starting_xi['position_on_grid']
+    df_starting_xi_grouped = df_starting_xi.groupby(['fixture_id', 'team_position'])['player_id'].agg(list).reset_index()
+    df_starting_xi_pivoted = df_starting_xi_grouped.pivot(index='fixture_id', columns='team_position', values='player_id').reset_index()
+
+    df_match_and_player_data = pd.merge(df_match_data, df_starting_xi_pivoted, on='fixture_id', how='left')
+
+    # Set of columns before the merge
+    original_columns = set(df_match_data.columns)
+    # Set of columns after the merge
+    merged_columns = set(df_match_and_player_data.columns)
+    # New columns added to df_merged
+    new_columns = merged_columns - original_columns
+    # Convert to a list, if needed
+    new_columns_list = list(new_columns)
+    # Create a mapping of player_id to overall_rating
+    id_to_rating = df_fifa_stats.set_index('player_id')['overall_rating'].to_dict()
+
+    # Define the lambda function to compute the average rating
+    def average_rating(ids):
+        if isinstance(ids, list) and ids:
+            ratings = [id_to_rating.get(id, np.nan) for id in ids]
+            return np.nanmean(ratings)
+        else:
+            return np.nan
+
+    # Apply the lambda function to the column
+    for column in new_columns_list:
+        df_match_and_player_data[column + '_rating'] = df_match_and_player_data[column].apply(average_rating)
+
+    # Extract columns related to home and away
+    home_cols = [col for col in df_match_and_player_data.columns if 'home_' in col and '_rating' in col]
+    away_cols = [col for col in df_match_and_player_data.columns if 'away_' in col and '_rating' in col]
+
+    # Apply aggregation
+    df_match_and_player_data['home_rating_aggregate'] = df_match_and_player_data[home_cols].apply(np.nanmean, axis=1)  
+    df_match_and_player_data['away_rating_aggregate'] = df_match_and_player_data[away_cols].apply(np.nanmean, axis=1)
+
+    return df_match_and_player_data
 
 
 def get_home_away_stats():
