@@ -14,7 +14,7 @@ def extract_player_info_from_log(log_file):
     return player_info
 
 def get_sofifa_link(query):
-    for j in search(query + " site:sofifa.com", num=10, stop=10, pause=2):
+    for j in search(query + " site:sofifa.com", num_results=10, sleep_interval=500, timeout=1000):
         return j
     return None
 
@@ -31,6 +31,7 @@ def scrape_data_for_players(player_info):
             print(f"Found URL: {new_url}")
             try:
                 soup_player = get_soup_for_url(new_url)
+                print(soup_player)
                 compile_data_for_all_fifa_version_cards(player["player_id"], soup_player)
                 print(f"Data compiled successfully for player with ID {player['player_id']}")
             except Exception as e:
