@@ -18,6 +18,7 @@ python-googlesearch = "^1.1.1"
 xgboost = "^2.1.2"
 selenium = "^4.26.1"
 fake-useragent = "^1.5.1"
+dynaconf = "^3.2.6"
 
 [tool.poetry.group.tensorflow.dependencies]
 tensorflow = {version = "^2.13.0"}

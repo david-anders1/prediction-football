@@ -1,6 +1,6 @@
 # Ignore .env files
 *.env
-
+*.secrets*
 
 # Ignore __pycache__ directories
 __pycache__/
