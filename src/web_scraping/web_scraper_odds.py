@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import time
 import sqlite3
 from numpy.random import random_sample
-from db_manager import *
+from db.db_manager import *
 from selenium.webdriver.chrome.service import Service
 
 

@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from db_manager import fetch_data_from_db
+from db.db_manager import fetch_data_from_db
 from sklearn.preprocessing import MinMaxScaler
 
 

@@ -1,5 +1,5 @@
-from data_preprocessor import preprocess_data
-from models import log_results_mlflow_with_cv, single_feature_assessment_ml_models, train_and_evaluate_models_with_cv
+from preprocessing.data_preprocessor import preprocess_data
+from data_analysis.models import log_results_mlflow_with_cv, single_feature_assessment_ml_models, train_and_evaluate_models_with_cv
 from sklearn.model_selection import train_test_split
 import os
 import pandas as pd

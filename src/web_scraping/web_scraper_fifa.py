@@ -4,7 +4,7 @@ from fake_useragent import UserAgent
 import re
 from datetime import datetime
 import json
-from db_manager import connect_db
+from db.db_manager import connect_db
 from copy import deepcopy
 
 headers = {'User-Agent': UserAgent().chrome}

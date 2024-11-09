@@ -1,4 +1,4 @@
-from match_data_retrieval import *
+from preprocessing.match_data_retrieval import *
 from web_scraper_odds import generate_links_current_season, generate_links_historic_seasons
 from web_scraper_fifa import *
 import time

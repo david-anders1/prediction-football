@@ -1,4 +1,4 @@
-from data_preprocessor import format_result
+from preprocessing.data_preprocessor import format_result
 import numpy as np
 
 def simulate_betting(df, model, X_test, stake=10):

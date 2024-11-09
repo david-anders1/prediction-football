@@ -5,7 +5,7 @@ from datetime import datetime
 import pandas as pd
 import os
 from dotenv import load_dotenv
-from db_manager import *
+from db.db_manager import *
 
 # Load environment variables from .env file
 load_dotenv()
