@@ -1,5 +1,5 @@
 import itertools
-from web_scraper_fifa import *
+from fifa_player_scraper import *
 import requests
 from datetime import datetime
 import pandas as pd

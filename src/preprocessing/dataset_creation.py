@@ -1,6 +1,6 @@
 from preprocessing.match_data_retrieval import *
-from web_scraper_odds import generate_links_current_season, generate_links_historic_seasons
-from web_scraper_fifa import *
+from odds_scraper import generate_links_current_season, generate_links_historic_seasons
+from fifa_player_scraper import *
 import time
 import random
 import logging

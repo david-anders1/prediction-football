@@ -1,5 +1,5 @@
 import re
-from web_scraper_fifa import get_soup_for_url, compile_data_for_all_fifa_version_cards
+from fifa_player_scraper import get_soup_for_url, compile_data_for_all_fifa_version_cards
 from googlesearch import search
 import time
 
